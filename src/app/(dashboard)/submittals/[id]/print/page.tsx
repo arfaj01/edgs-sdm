@@ -427,31 +427,21 @@ export default function PrintSubmittalPage() {
           )}
         </Section>
 
-        {/* ─── Section E: Consultant ─── */}
-        <Section letter="E" title={t('approvalForm.sectionConsultant')}>
+        {/* ─── Section E: Notes (submitter-authored) ─── */}
+        <Section letter="E" title={t('approvalForm.sectionNotes')}>
           <div className="text-xs space-y-3">
             <div>
               <div className="text-[10px] font-semibold uppercase text-gray-500 mb-1">
-                {t('approvalForm.consultantRemarks')}
+                {t('approvalForm.sectionNotes')}
               </div>
               <div
-                className="min-h-[50px] p-2 border border-gray-300 rounded text-[11px] leading-relaxed"
+                className="min-h-[60px] p-2 border border-gray-300 rounded text-[11px] leading-relaxed whitespace-pre-wrap"
                 style={{ backgroundColor: '#fafafa' }}
               >
                 {(isRTL ? submittal.notes_ar : submittal.notes) || (
                   <span className="text-gray-400">—</span>
                 )}
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-6">
-              <SignatureSlot
-                label={t('approvalForm.consultantName')}
-                subLabel={t('approvalForm.consultantSignature')}
-              />
-              <SignatureSlot
-                label={isRTL ? 'التاريخ' : 'Date'}
-                subLabel={isRTL ? 'التوقيع' : 'Sign'}
-              />
             </div>
           </div>
         </Section>

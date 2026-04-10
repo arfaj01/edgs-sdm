@@ -33,7 +33,23 @@ import type {
   Discipline,
   DeliverableFormat,
   RequestType,
+  UserRole,
 } from '@/types/database'
+
+// Role gating for the new-submittal form.
+// Submitter-side roles see only A–E (E relabeled as Notes). Approval-side
+// roles additionally see F (specialized consultant reference), G (owner
+// decisions), and H (action-code legend).
+const SUBMITTER_ROLES: UserRole[] = ['submitter', 'consultant']
+const APPROVAL_ROLES: UserRole[] = [
+  'technical_unit',
+  'quality_unit',
+  'project_manager',
+  'department_director',
+  'admin',
+  'owner',
+  'project_coordinator',
+]
 import { AlertCircle, Plus, Trash2, FileText, Save, Send, CheckCircle2 } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────
@@ -142,6 +158,22 @@ function ApprovalFormPage() {
     () => deliverables?.find((d) => d.deliverable_id === selectedDeliverableId),
     [deliverables, selectedDeliverableId]
   )
+
+  // Role-based visibility. Submitters only see A–E during the initial
+  // submission stage; approval-side roles (Technical/Quality/PM/Admin/
+  // Director/Owner/Project Coordinator) additionally see sections F–H.
+  // This is a UI-level gate only — RLS and workflow triggers remain
+  // the authoritative enforcement layer on the server.
+  const currentRole = user?.role as UserRole | undefined
+  const isApprovalRole =
+    !!currentRole && APPROVAL_ROLES.includes(currentRole)
+  const isSubmitterRole =
+    !currentRole || SUBMITTER_ROLES.includes(currentRole)
+  // Submitter-only users never see approval-side sections on the
+  // initial submission form. Approval roles (admin/director/TU/QU/PM)
+  // still see everything so they can review while creating a record
+  // on behalf of a submitter during the pilot.
+  const showApprovalSections = isApprovalRole && !isSubmitterRole
 
   // Auto-select primary discipline when deliverable changes
   useEffect(() => {
@@ -623,33 +655,32 @@ function ApprovalFormPage() {
         )}
       </FormSection>
 
-      {/* ─────────────── SECTION E: Consultant ─────────────── */}
-      <FormSection letter="E" title={t('approvalForm.sectionConsultant')}>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <ReadOnlyField
-            label={t('approvalForm.consultantName')}
-            value={user?.full_name || '—'}
-          />
-          <ReadOnlyField
-            label={t('approvalForm.consultantOrganization')}
-            value={user?.organization || '—'}
-          />
-        </div>
-        <div className="mt-4">
+      {/* ─────────────── SECTION E: Notes (visible to everyone, Submitter editable) ─────────────── */}
+      <FormSection
+        letter="E"
+        title={t('approvalForm.sectionNotes')}
+        hint={t('approvalForm.sectionNotesHint')}
+      >
+        <div className="mt-1">
           <label className="block text-sm font-medium text-gray-900 mb-2">
-            {t('approvalForm.consultantRemarks')}
+            {t('approvalForm.sectionNotes')}{' '}
+            <span className="text-xs text-gray-500 font-normal">
+              ({t('common.optional')})
+            </span>
           </label>
           <textarea
             value={isRTL ? notesAr : notes}
             onChange={(e) => (isRTL ? setNotesAr(e.target.value) : setNotes(e.target.value))}
-            rows={4}
-            placeholder={t('approvalForm.consultantRemarksPlaceholder')}
+            rows={5}
+            placeholder={t('approvalForm.notesPlaceholder')}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#045859] text-base"
+            dir={isRTL ? 'rtl' : 'ltr'}
           />
         </div>
       </FormSection>
 
-      {/* ─────────────── SECTION F: Specialized Consultant ─────────────── */}
+      {/* ─────────────── SECTION F: Specialized Consultant (approval roles only) ─────────────── */}
+      {showApprovalSections && (
       <FormSection
         letter="F"
         title={t('approvalForm.sectionSpecializedConsultant')}
@@ -681,8 +712,10 @@ function ApprovalFormPage() {
           * {t('approvalForm.specializedActionCode')} — {t('review.coordinatorHint')}
         </p>
       </FormSection>
+      )}
 
-      {/* ─────────────── SECTION G: Owner / Internal ─────────────── */}
+      {/* ─────────────── SECTION G: Owner / Internal (approval roles only) ─────────────── */}
+      {showApprovalSections && (
       <FormSection letter="G" title={t('approvalForm.sectionOwner')}>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <OwnerSlot label={t('approvalForm.ownerPC')} />
@@ -693,8 +726,10 @@ function ApprovalFormPage() {
           {t('review.coordinatorHint')}
         </p>
       </FormSection>
+      )}
 
-      {/* ─────────────── SECTION H: Action Codes ─────────────── */}
+      {/* ─────────────── SECTION H: Action Codes (approval roles only — submitters don't set codes) ─────────────── */}
+      {showApprovalSections && (
       <FormSection letter="H" title={t('approvalForm.sectionActionCodes')}>
         <ul className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
           <li className="flex items-start gap-3 p-3 border border-gray-200 rounded-lg">
@@ -715,6 +750,7 @@ function ApprovalFormPage() {
           </li>
         </ul>
       </FormSection>
+      )}
 
       {/* ─────────────── Actions ─────────────── */}
       <div className="sticky bottom-0 bg-white border-t border-gray-200 py-4 -mx-6 lg:-mx-8 px-6 lg:px-8 z-20">
