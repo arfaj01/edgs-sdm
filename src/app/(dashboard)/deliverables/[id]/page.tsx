@@ -37,7 +37,13 @@ export default function DeliverableDetailPage() {
   function getAvailableActions(status: SubmittalStatus, role: UserRole, hasDocuments: boolean) {
     const actions: { trigger: WorkflowTrigger; labelKey: string; icon: React.ReactNode; color: string; descKey: string; needsDocs: boolean }[] = []
 
-    if (status === 'draft' && (role === 'consultant' || role === 'admin')) {
+    // Roles allowed to submit / resubmit a deliverable (submitters + legacy consultants)
+    const submitterRoles: UserRole[] = ['submitter', 'consultant', 'admin', 'department_director', 'owner']
+    // Roles allowed to pick up a submitted item for review (Technical Unit is the
+    // v2 pickup stage; legacy project_coordinator kept for backward compatibility)
+    const pickupRoles: UserRole[] = ['technical_unit', 'project_coordinator', 'admin', 'department_director', 'owner']
+
+    if (status === 'draft' && submitterRoles.includes(role)) {
       actions.push({
         trigger: 'consultant_submit',
         labelKey: 'deliverables.submitForReview',
@@ -48,7 +54,7 @@ export default function DeliverableDetailPage() {
       })
     }
 
-    if ((status === 'submitted' || status === 'resubmitted') && (role === 'project_coordinator' || role === 'admin')) {
+    if ((status === 'submitted' || status === 'resubmitted') && pickupRoles.includes(role)) {
       actions.push({
         trigger: 'coordinator_pickup',
         labelKey: 'deliverables.pickUpReview',
@@ -59,7 +65,7 @@ export default function DeliverableDetailPage() {
       })
     }
 
-    if (status === 'revision_required' && (role === 'consultant' || role === 'admin')) {
+    if (status === 'revision_required' && submitterRoles.includes(role)) {
       actions.push({
         trigger: 'consultant_resubmit',
         labelKey: 'deliverables.resubmit',
@@ -219,7 +225,7 @@ export default function DeliverableDetailPage() {
             </div>
           )}
 
-          {user && (user.role === 'consultant' || user.role === 'admin') && (
+          {user && ['submitter', 'consultant', 'admin', 'department_director', 'owner'].includes(user.role) && (
             <button
               onClick={() => router.push(`/submittals/new?deliverable_id=${id}`)}
               className="w-full px-4 py-3 text-white font-medium rounded-lg transition-colors shadow-sm"
@@ -275,12 +281,12 @@ export default function DeliverableDetailPage() {
                     )}
 
                     <div className="mt-3 flex gap-3">
-                      {submittal.status === 'under_review' && user && (user.role === 'project_coordinator' || user.role === 'project_manager' || user.role === 'admin') && (
+                      {submittal.status === 'under_review' && user && ['technical_unit', 'quality_unit', 'project_manager', 'project_coordinator', 'admin', 'department_director'].includes(user.role) && (
                         <button onClick={() => router.push(`/reviews/${submittal.id}`)} className="text-sm font-medium" style={{ color: '#045859' }}>
                           {t('review.title')} →
                         </button>
                       )}
-                      {submittal.status === 'under_review' && user && (user.role === 'owner' || user.role === 'admin') && (
+                      {submittal.status === 'under_review' && user && ['project_manager', 'department_director', 'admin', 'owner'].includes(user.role) && (
                         <button onClick={() => router.push(`/approvals/${submittal.id}`)} className="text-sm font-medium" style={{ color: '#87ba26' }}>
                           {t('approval.title')} →
                         </button>

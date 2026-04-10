@@ -18,6 +18,37 @@ import type {
 // Printable "Request for Approval of Deliverables" form
 // ═══════════════════════════════════════════════════════════════════
 
+// Row from v_workflow_chain view (04-workflow-v2 migration)
+interface WorkflowChainRow {
+  submittal_id: string
+  submittal_stage: string | null
+  request_type: 'study' | 'execution' | null
+  technical_action_code: ActionCode | null
+  technical_comments: string | null
+  technical_comments_ar: string | null
+  technical_reviewed_at: string | null
+  technical_reviewer_name: string | null
+  technical_reviewer_name_ar: string | null
+  quality_action_code: ActionCode | null
+  quality_comments: string | null
+  quality_comments_ar: string | null
+  quality_reviewed_at: string | null
+  quality_reviewer_name: string | null
+  quality_reviewer_name_ar: string | null
+  pm_action_code: ActionCode | null
+  pm_comments: string | null
+  pm_comments_ar: string | null
+  pm_reviewed_at: string | null
+  pm_reviewer_name: string | null
+  pm_reviewer_name_ar: string | null
+  final_action_code: ActionCode | null
+  final_comments: string | null
+  final_decision_date: string | null
+  final_approver_name: string | null
+  final_approver_name_ar: string | null
+}
+
+
 export default function PrintSubmittalPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
@@ -32,6 +63,7 @@ export default function PrintSubmittalPage() {
   const [projectName, setProjectName] = useState<string>('')
   const [projectNameAr, setProjectNameAr] = useState<string>('')
   const [projectCode, setProjectCode] = useState<string>('')
+  const [workflowChain, setWorkflowChain] = useState<WorkflowChainRow | null>(null)
   const [loading, setLoading] = useState(true)
 
   // Fetch deliverable + project + line items
@@ -81,6 +113,19 @@ export default function PrintSubmittalPage() {
           .order('item_no', { ascending: true })
 
         if (!cancelled) setLineItems((items as SubmittalLineItem[]) || [])
+
+        // Workflow chain (v2) — from v_workflow_chain view.
+        // Gracefully fall back to null if the view is not present yet.
+        try {
+          const { data: chain } = await supabase
+            .from('v_workflow_chain')
+            .select('*')
+            .eq('submittal_id', submittal!.id)
+            .maybeSingle()
+          if (!cancelled && chain) setWorkflowChain(chain as unknown as WorkflowChainRow)
+        } catch (e) {
+          console.warn('[print] workflow chain view not available', e)
+        }
       } catch (e) {
         // Swallow — show whatever data we already have
         console.warn('[print] related data load error', e)
@@ -146,13 +191,6 @@ export default function PrintSubmittalPage() {
       </div>
     )
   }
-
-  const purposeLabel =
-    submittal.purpose === 'for_approval'
-      ? t('submittal.forApproval')
-      : submittal.purpose === 'for_follow_up'
-      ? t('submittal.forFollowUp')
-      : t('submittal.forTendering')
 
   const allDisciplines: Discipline[] =
     submittal.disciplines && submittal.disciplines.length > 0
@@ -294,8 +332,28 @@ export default function PrintSubmittalPage() {
               checked={submittal.purpose === 'for_follow_up'}
             />
             <PurposeBox
-              label={t('submittal.forTendering')}
-              checked={submittal.purpose === 'for_tendering'}
+              label={t('submittal.forInformation')}
+              checked={submittal.purpose === 'for_information'}
+            />
+            {submittal.purpose === 'for_tendering' && (
+              <PurposeBox
+                label={t('submittal.forTendering')}
+                checked
+              />
+            )}
+          </div>
+        </Section>
+
+        {/* ─── Section B2: Request Type ─── */}
+        <Section letter="B2" title={t('requestType.label')}>
+          <div className="flex flex-wrap gap-6 text-xs">
+            <PurposeBox
+              label={t('requestType.study')}
+              checked={submittal.request_type === 'study'}
+            />
+            <PurposeBox
+              label={t('requestType.execution')}
+              checked={submittal.request_type === 'execution'}
             />
           </div>
         </Section>
@@ -423,12 +481,70 @@ export default function PrintSubmittalPage() {
           </div>
         </Section>
 
-        {/* ─── Section G: Owner / Internal ─── */}
-        <Section letter="G" title={t('approvalForm.sectionOwner')}>
-          <div className="grid grid-cols-3 gap-3 text-xs">
-            <OwnerColumn title={t('approvalForm.ownerPC')} />
-            <OwnerColumn title={t('approvalForm.ownerPM')} />
-            <OwnerColumn title={t('approvalForm.ownerFinal')} />
+        {/* ─── Section G: Workflow Chain (Technical → Quality → PM → Final) ─── */}
+        <Section letter="G" title={t('workflow.timelineTitle')}>
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            <StageColumn
+              title={t('workflow.stageTechnical')}
+              actionCode={workflowChain?.technical_action_code ?? null}
+              reviewerName={
+                isRTL
+                  ? workflowChain?.technical_reviewer_name_ar || workflowChain?.technical_reviewer_name || ''
+                  : workflowChain?.technical_reviewer_name || ''
+              }
+              reviewedAt={workflowChain?.technical_reviewed_at ?? null}
+              comments={
+                isRTL
+                  ? workflowChain?.technical_comments_ar || workflowChain?.technical_comments || ''
+                  : workflowChain?.technical_comments || ''
+              }
+              isRTL={isRTL}
+            />
+            <StageColumn
+              title={t('workflow.stageQuality')}
+              actionCode={workflowChain?.quality_action_code ?? null}
+              reviewerName={
+                isRTL
+                  ? workflowChain?.quality_reviewer_name_ar || workflowChain?.quality_reviewer_name || ''
+                  : workflowChain?.quality_reviewer_name || ''
+              }
+              reviewedAt={workflowChain?.quality_reviewed_at ?? null}
+              comments={
+                isRTL
+                  ? workflowChain?.quality_comments_ar || workflowChain?.quality_comments || ''
+                  : workflowChain?.quality_comments || ''
+              }
+              isRTL={isRTL}
+            />
+            <StageColumn
+              title={t('workflow.stagePM')}
+              actionCode={workflowChain?.pm_action_code ?? null}
+              reviewerName={
+                isRTL
+                  ? workflowChain?.pm_reviewer_name_ar || workflowChain?.pm_reviewer_name || ''
+                  : workflowChain?.pm_reviewer_name || ''
+              }
+              reviewedAt={workflowChain?.pm_reviewed_at ?? null}
+              comments={
+                isRTL
+                  ? workflowChain?.pm_comments_ar || workflowChain?.pm_comments || ''
+                  : workflowChain?.pm_comments || ''
+              }
+              isRTL={isRTL}
+            />
+            <StageColumn
+              title={t('workflow.stageFinal')}
+              actionCode={workflowChain?.final_action_code ?? null}
+              reviewerName={
+                isRTL
+                  ? workflowChain?.final_approver_name_ar || workflowChain?.final_approver_name || ''
+                  : workflowChain?.final_approver_name || ''
+              }
+              reviewedAt={workflowChain?.final_decision_date ?? null}
+              comments={workflowChain?.final_comments || ''}
+              isRTL={isRTL}
+              finalStage
+            />
           </div>
         </Section>
 
@@ -601,32 +717,105 @@ function SignatureSlot({ label, subLabel }: { label: string; subLabel: string })
   )
 }
 
-function OwnerColumn({ title }: { title: string }) {
+function StageColumn({
+  title,
+  actionCode,
+  reviewerName,
+  reviewedAt,
+  comments,
+  isRTL,
+  finalStage = false,
+}: {
+  title: string
+  actionCode: ActionCode | null
+  reviewerName: string
+  reviewedAt: string | null
+  comments: string
+  isRTL: boolean
+  finalStage?: boolean
+}) {
+  const hasDecision = actionCode !== null || reviewerName || reviewedAt
   return (
     <div
       className="border rounded p-2"
-      style={{ borderColor: '#045859', backgroundColor: '#fafafa' }}
+      style={{
+        borderColor: finalStage && actionCode ? '#87ba26' : '#045859',
+        backgroundColor: finalStage && actionCode ? '#f3faea' : '#fafafa',
+      }}
     >
       <div
-        className="text-[10px] font-bold uppercase pb-1 mb-2 border-b"
-        style={{ color: '#045859', borderColor: '#e6f2f2' }}
+        className="flex items-center justify-between pb-1 mb-2 border-b"
+        style={{ borderColor: '#e6f2f2' }}
       >
-        {title}
+        <div
+          className="text-[10px] font-bold uppercase"
+          style={{ color: '#045859' }}
+        >
+          {title}
+        </div>
+        {actionCode && (
+          <span
+            className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold text-white"
+            style={{ backgroundColor: ACTION_COLORS[actionCode] }}
+          >
+            {actionCode}
+          </span>
+        )}
       </div>
-      <div className="space-y-3">
-        <div>
-          <div className="text-[9px] font-semibold uppercase text-gray-500">Action</div>
-          <div className="h-5 border-b border-gray-300" />
+      {hasDecision ? (
+        <div className="space-y-1.5">
+          <div>
+            <div className="text-[9px] font-semibold uppercase text-gray-500">
+              {isRTL ? 'المراجع' : 'Reviewer'}
+            </div>
+            <div className="text-[10px]" style={{ color: '#1f2937' }}>
+              {reviewerName || '—'}
+            </div>
+          </div>
+          <div>
+            <div className="text-[9px] font-semibold uppercase text-gray-500">
+              {isRTL ? 'التاريخ' : 'Date'}
+            </div>
+            <div className="text-[10px]" style={{ color: '#1f2937' }}>
+              {reviewedAt ? formatDate(reviewedAt) : '—'}
+            </div>
+          </div>
+          {comments && (
+            <div>
+              <div className="text-[9px] font-semibold uppercase text-gray-500">
+                {isRTL ? 'ملاحظات' : 'Comments'}
+              </div>
+              <div
+                className="text-[10px] leading-snug"
+                style={{ color: '#1f2937' }}
+              >
+                {comments}
+              </div>
+            </div>
+          )}
         </div>
-        <div>
-          <div className="text-[9px] font-semibold uppercase text-gray-500">Signature</div>
-          <div className="h-8 border-b border-gray-300" />
+      ) : (
+        <div className="space-y-3">
+          <div>
+            <div className="text-[9px] font-semibold uppercase text-gray-500">
+              {isRTL ? 'المراجع' : 'Reviewer'}
+            </div>
+            <div className="h-5 border-b border-gray-300" />
+          </div>
+          <div>
+            <div className="text-[9px] font-semibold uppercase text-gray-500">
+              {isRTL ? 'التوقيع' : 'Signature'}
+            </div>
+            <div className="h-8 border-b border-gray-300" />
+          </div>
+          <div>
+            <div className="text-[9px] font-semibold uppercase text-gray-500">
+              {isRTL ? 'التاريخ' : 'Date'}
+            </div>
+            <div className="h-5 border-b border-gray-300" />
+          </div>
         </div>
-        <div>
-          <div className="text-[9px] font-semibold uppercase text-gray-500">Date</div>
-          <div className="h-5 border-b border-gray-300" />
-        </div>
-      </div>
+      )}
     </div>
   )
 }

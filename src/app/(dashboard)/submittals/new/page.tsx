@@ -32,6 +32,7 @@ import type {
   SubmittalPurpose,
   Discipline,
   DeliverableFormat,
+  RequestType,
 } from '@/types/database'
 import { AlertCircle, Plus, Trash2, FileText, Save, Send, CheckCircle2 } from 'lucide-react'
 
@@ -61,10 +62,17 @@ const ALL_FORMATS: DeliverableFormat[] = [
   'MIXED',
 ]
 
+// Canonical purpose options for all new submissions. 'for_tendering' is kept
+// as a legacy value in the type but is no longer offered here.
 const SUBMITTAL_PURPOSES: { value: SubmittalPurpose; labelKey: string }[] = [
-  { value: 'for_approval', labelKey: 'submittal.forApproval' },
   { value: 'for_follow_up', labelKey: 'submittal.forFollowUp' },
-  { value: 'for_tendering', labelKey: 'submittal.forTendering' },
+  { value: 'for_approval', labelKey: 'submittal.forApproval' },
+  { value: 'for_information', labelKey: 'submittal.forInformation' },
+]
+
+const REQUEST_TYPES: { value: RequestType; labelKey: string; descKey: string }[] = [
+  { value: 'study', labelKey: 'requestType.study', descKey: 'requestType.studyDesc' },
+  { value: 'execution', labelKey: 'requestType.execution', descKey: 'requestType.executionDesc' },
 ]
 
 // ─────────────────────────────────────────────────────────────
@@ -118,6 +126,7 @@ function ApprovalFormPage() {
     searchParams.get('deliverable_id') || ''
   )
   const [purpose, setPurpose] = useState<SubmittalPurpose | ''>('')
+  const [requestType, setRequestType] = useState<RequestType>('study')
   const [disciplines, setDisciplines] = useState<Discipline[]>([])
   const [notes, setNotes] = useState('')
   const [notesAr, setNotesAr] = useState('')
@@ -210,6 +219,7 @@ function ApprovalFormPage() {
         disciplines,
         notes: notes || null,
         notes_ar: notesAr || null,
+        request_type: requestType,
       })
       .eq('id', submittalId)
     if (updErr) {
@@ -422,6 +432,42 @@ function ApprovalFormPage() {
                 style={{ accentColor: '#045859' }}
               />
               <span className="ms-3 font-medium text-gray-900">{t(p.labelKey)}</span>
+            </label>
+          ))}
+        </div>
+      </FormSection>
+
+      {/* ─────────────── SECTION B2: Request Type ─────────────── */}
+      <FormSection
+        letter="B2"
+        title={t('requestType.label')}
+        hint={t('requestType.hint')}
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {REQUEST_TYPES.map((r) => (
+            <label
+              key={r.value}
+              className={cn(
+                'flex items-start gap-3 p-4 border rounded-lg cursor-pointer transition-colors',
+                requestType === r.value
+                  ? 'bg-[#e6f2f2]'
+                  : 'border-gray-200 bg-white hover:border-gray-300'
+              )}
+              style={requestType === r.value ? { borderColor: '#045859' } : undefined}
+            >
+              <input
+                type="radio"
+                name="requestType"
+                value={r.value}
+                checked={requestType === r.value}
+                onChange={() => setRequestType(r.value)}
+                className="w-4 h-4 cursor-pointer mt-1"
+                style={{ accentColor: '#045859' }}
+              />
+              <div>
+                <div className="font-medium text-gray-900">{t(r.labelKey)}</div>
+                <div className="text-xs text-gray-600 mt-0.5">{t(r.descKey)}</div>
+              </div>
             </label>
           ))}
         </div>

@@ -26,7 +26,9 @@ export interface SubmittalFilters {
  */
 export interface CreateSubmittalPayload {
   deliverable_id: string;
-  purpose: 'for_approval' | 'for_follow_up' | 'for_tendering';
+  // 'for_information' is the v2 value; 'for_tendering' kept only for legacy
+  // rows that may still be migrated from the old workflow.
+  purpose: 'for_approval' | 'for_follow_up' | 'for_information' | 'for_tendering';
   notes?: string;
 }
 

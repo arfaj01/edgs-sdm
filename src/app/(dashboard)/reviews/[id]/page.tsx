@@ -54,7 +54,11 @@ export default function ReviewPage() {
   }
 
   const canReview = submittal.status === 'submitted' || submittal.status === 'under_review' || submittal.status === 'resubmitted';
-  const isCoordinator = user?.role === 'project_coordinator';
+  // Allow Technical Unit, Quality Unit, and legacy project_coordinator to perform reviews
+  const isCoordinator =
+    user?.role === 'technical_unit' ||
+    user?.role === 'quality_unit' ||
+    user?.role === 'project_coordinator';
   const isPM = user?.role === 'project_manager';
 
   const handleSubmitReview = async () => {

@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   ScrollText,
   Bell,
+  Users as UsersIcon,
   Menu,
   X,
 } from 'lucide-react';
@@ -51,7 +52,7 @@ export function Sidebar({ userRole }: SidebarProps) {
       labelKey: 'nav.newSubmittal',
       href: '/submittals/new',
       icon: <Send className="w-5 h-5" />,
-      requiresRole: ['consultant', 'admin'],
+      requiresRole: ['submitter', 'consultant', 'admin', 'department_director', 'owner'],
     },
   ];
 
@@ -60,13 +61,28 @@ export function Sidebar({ userRole }: SidebarProps) {
       labelKey: 'nav.reviews',
       href: '/reviews',
       icon: <ClipboardCheck className="w-5 h-5" />,
-      requiresRole: ['project_coordinator', 'project_manager', 'admin'],
+      requiresRole: [
+        'technical_unit',
+        'quality_unit',
+        'project_manager',
+        'admin',
+        'department_director',
+        // legacy
+        'project_coordinator',
+        'owner',
+      ],
     },
     {
       labelKey: 'nav.approvals',
       href: '/approvals',
       icon: <ShieldCheck className="w-5 h-5" />,
-      requiresRole: ['owner', 'admin'],
+      requiresRole: [
+        'project_manager',
+        'department_director',
+        'admin',
+        // legacy
+        'owner',
+      ],
     },
   ];
 
@@ -75,12 +91,21 @@ export function Sidebar({ userRole }: SidebarProps) {
       labelKey: 'nav.auditLog',
       href: '/audit',
       icon: <ScrollText className="w-5 h-5" />,
-      requiresRole: ['admin', 'project_manager', 'owner'],
+      requiresRole: ['admin', 'project_manager', 'department_director', 'owner'],
     },
     {
       labelKey: 'nav.notifications',
       href: '/notifications',
       icon: <Bell className="w-5 h-5" />,
+    },
+  ];
+
+  const adminItems: NavItem[] = [
+    {
+      labelKey: 'nav.users',
+      href: '/users',
+      icon: <UsersIcon className="w-5 h-5" />,
+      requiresRole: ['admin', 'department_director', 'owner'],
     },
   ];
 
@@ -215,6 +240,7 @@ export function Sidebar({ userRole }: SidebarProps) {
           <NavSection titleKey="nav.main" items={mainItems} />
           <NavSection titleKey="nav.workflow" items={workflowItems} />
           <NavSection titleKey="nav.system" items={systemItems} />
+          <NavSection titleKey="nav.administration" items={adminItems} />
         </nav>
 
         {/* Footer */}

@@ -7,11 +7,35 @@
 // ENUMS (matching database enum types)
 // ============================================================================
 
-export type UserRole = 'consultant' | 'project_coordinator' | 'project_manager' | 'owner' | 'admin';
+// Legacy roles preserved for backward compatibility; new roles added in migration 04.
+// Canonical roles going forward: submitter, technical_unit, quality_unit, project_manager,
+// department_director, admin. consultant/project_coordinator/owner remain valid in DB.
+export type UserRole =
+  | 'submitter'
+  | 'technical_unit'
+  | 'quality_unit'
+  | 'project_manager'
+  | 'department_director'
+  | 'admin'
+  // legacy
+  | 'consultant'
+  | 'project_coordinator'
+  | 'owner';
+
 export type SubmittalStatus = 'draft' | 'submitted' | 'under_review' | 'revision_required' | 'resubmitted' | 'approved' | 'rejected';
+
+// Multi-stage review tracker (set while status = 'under_review')
+// Added in migration 04.
+export type SubmittalStage = 'technical' | 'quality' | 'pm' | 'returned' | null;
+
+// Broad request classification. Added in migration 04.
+export type RequestType = 'study' | 'execution';
+
 export type ActionCode = 'A' | 'B' | 'C' | 'D';
 export type DeliverableFormat = 'PDF' | 'DWG' | 'RVT' | 'XLS' | 'PPTX' | 'DOC' | 'IFC' | 'MIXED';
-export type SubmittalPurpose = 'for_approval' | 'for_follow_up' | 'for_tendering';
+
+// 'for_tendering' kept for legacy rows; all new submissions use 'for_information'.
+export type SubmittalPurpose = 'for_approval' | 'for_follow_up' | 'for_information' | 'for_tendering';
 export type Discipline = 'architectural' | 'structural' | 'civil' | 'mechanical' | 'hvac' | 'plumbing' | 'electrical' | 'reports' | 'general';
 export type AuditAction = 'create' | 'update' | 'delete' | 'status_change' | 'review_submit' | 'approval_submit' | 'document_upload' | 'document_delete';
 export type ProjectStatus = 'active' | 'on_hold' | 'completed' | 'cancelled';
@@ -134,6 +158,8 @@ export interface Submittal {
   previous_submittal_id: string | null; // UUID
   previous_submittal_date: string | null; // DATE - added in 02-approval-form-extensions.sql
   consultant_signature_url: string | null; // added in 02-approval-form-extensions.sql
+  submittal_stage: SubmittalStage; // added in 04-workflow-v2 — multi-stage review tracker
+  request_type: RequestType; // added in 04-workflow-v2 — study | execution
   notes: string | null;
   notes_ar: string | null;
   created_at: string; // timestamp
@@ -182,6 +208,7 @@ export interface CreateLineItemRequest {
 export interface CreateApprovalFormRequest {
   deliverable_id: string;
   purpose: SubmittalPurpose;
+  request_type?: RequestType; // added in 04-workflow-v2
   disciplines: Discipline[];
   notes?: string;
   notes_ar?: string;
