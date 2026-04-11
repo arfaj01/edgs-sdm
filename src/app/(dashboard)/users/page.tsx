@@ -3,16 +3,21 @@
 /**
  * Users & Permissions page.
  *
- * Restricted to admin / department_director only. Provides list view,
- * inline search + role filter, plus create / edit / activate / deactivate
- * actions. Uses the public.users table directly through the Supabase
- * client.
+ * Restricted to admin / department_director (and legacy 'owner').
+ * Provides list view, search + filter, create / edit / activate /
+ * deactivate, and project-membership management.
  *
- * NOTE: Creating a Supabase Auth user (email + password) must be done
- * through a SECURITY DEFINER edge function in a production install.
- * For the ministry pilot we write directly into public.users and let
- * the Admin separately send the invite from the Supabase dashboard.
- * That trade-off is documented in the Users section of the manual.
+ * Creating a user goes through the SECURITY DEFINER edge function
+ * `admin-create-user`, which provisions the Supabase Auth identity
+ * AND the public.users profile in a single atomic call. This means
+ * an admin can onboard a user end-to-end without ever leaving the
+ * page (no separate "Invite from dashboard" step).
+ *
+ * Project membership is editable from the same modal: any number of
+ * projects can be assigned, and each membership is upserted into
+ * project_members on save. The "global owner" / department director
+ * is auto-attached to every project via a database trigger, so they
+ * do not need to be explicitly assigned.
  */
 
 import { useEffect, useMemo, useState } from 'react'
@@ -31,7 +36,7 @@ import { useI18n } from '@/lib/i18n'
 import { useUser } from '@/hooks/use-user'
 import { useSupabase } from '@/hooks/use-supabase'
 import { cn } from '@/lib/utils'
-import type { User, UserRole } from '@/types/database'
+import type { User, UserRole, Project } from '@/types/database'
 
 // Canonical role list (legacy roles still shown if present in DB)
 const CANONICAL_ROLES: UserRole[] = [
@@ -50,22 +55,26 @@ const DIRECTOR_OR_ADMIN: UserRole[] = ['admin', 'department_director', 'owner']
 type FormState = {
   id?: string
   email: string
+  password: string
   full_name: string
   full_name_ar: string
   role: UserRole
   organization: string
   phone: string
   is_active: boolean
+  project_ids: string[]
 }
 
 const EMPTY_FORM: FormState = {
   email: '',
+  password: '',
   full_name: '',
   full_name_ar: '',
   role: 'submitter',
   organization: '',
   phone: '',
   is_active: true,
+  project_ids: [],
 }
 
 export default function UsersPage() {
@@ -74,6 +83,8 @@ export default function UsersPage() {
   const { user: currentUser, isLoading: currentLoading } = useUser()
 
   const [users, setUsers] = useState<User[]>([])
+  const [projects, setProjects] = useState<Project[]>([])
+  const [memberships, setMemberships] = useState<Record<string, string[]>>({}) // userId -> projectIds
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -90,7 +101,7 @@ export default function UsersPage() {
   const canAccess =
     !currentLoading && currentUser && DIRECTOR_OR_ADMIN.includes(currentUser.role)
 
-  // ── Load users ───────────────────────────────────────────────
+  // ── Load users + projects + memberships ──────────────────────
   useEffect(() => {
     if (!canAccess) return
     let cancelled = false
@@ -99,13 +110,33 @@ export default function UsersPage() {
       setLoading(true)
       setLoadError(null)
       try {
-        const { data, error } = await supabase
-          .from('users')
-          .select('*')
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false })
-        if (error) throw error
-        if (!cancelled) setUsers((data as User[]) || [])
+        const [usersRes, projectsRes, membersRes] = await Promise.all([
+          supabase
+            .from('users')
+            .select('*')
+            .is('deleted_at', null)
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('projects')
+            .select('id, code, name, name_ar')
+            .is('deleted_at', null)
+            .order('code'),
+          supabase.from('project_members').select('user_id, project_id'),
+        ])
+        if (usersRes.error) throw usersRes.error
+        if (projectsRes.error) throw projectsRes.error
+        if (membersRes.error) throw membersRes.error
+
+        const map: Record<string, string[]> = {}
+        for (const m of (membersRes.data as { user_id: string; project_id: string }[]) || []) {
+          if (!map[m.user_id]) map[m.user_id] = []
+          map[m.user_id].push(m.project_id)
+        }
+        if (!cancelled) {
+          setUsers((usersRes.data as User[]) || [])
+          setProjects((projectsRes.data as Project[]) || [])
+          setMemberships(map)
+        }
       } catch (e) {
         if (!cancelled) {
           setLoadError(e instanceof Error ? e.message : String(e))
@@ -159,12 +190,14 @@ export default function UsersPage() {
     setForm({
       id: u.id,
       email: u.email,
+      password: '',
       full_name: u.full_name || '',
       full_name_ar: u.full_name_ar || '',
       role: u.role,
       organization: u.organization || '',
       phone: u.phone || '',
       is_active: u.is_active,
+      project_ids: memberships[u.id] || [],
     })
     setFormError(null)
     setShowForm(true)
@@ -175,15 +208,33 @@ export default function UsersPage() {
     setFormError(null)
   }
 
+  const toggleProjectAssignment = (projectId: string) => {
+    setForm((prev) => {
+      const has = prev.project_ids.includes(projectId)
+      return {
+        ...prev,
+        project_ids: has
+          ? prev.project_ids.filter((p) => p !== projectId)
+          : [...prev.project_ids, projectId],
+      }
+    })
+  }
+
   const handleSave = async () => {
     if (!form.email || !form.full_name || !form.role) {
       setFormError(t('common.required'))
       return
     }
+    if (!form.id && (!form.password || form.password.length < 6)) {
+      setFormError('Password must be at least 6 characters')
+      return
+    }
+
     setSaving(true)
     setFormError(null)
     try {
       if (form.id) {
+        // ── EDIT existing user ──
         const { error } = await supabase
           .from('users')
           .update({
@@ -196,6 +247,33 @@ export default function UsersPage() {
           })
           .eq('id', form.id)
         if (error) throw error
+
+        // Sync project memberships: compute add / remove sets
+        const current = new Set(memberships[form.id] || [])
+        const next = new Set(form.project_ids)
+        const toAdd = [...next].filter((p) => !current.has(p))
+        const toRemove = [...current].filter((p) => !next.has(p))
+
+        if (toAdd.length > 0) {
+          const rows = toAdd.map((pid) => ({
+            project_id: pid,
+            user_id: form.id!,
+            role: form.role,
+          }))
+          const { error: addErr } = await supabase
+            .from('project_members')
+            .upsert(rows, { onConflict: 'project_id,user_id' })
+          if (addErr) throw addErr
+        }
+        if (toRemove.length > 0) {
+          const { error: delErr } = await supabase
+            .from('project_members')
+            .delete()
+            .eq('user_id', form.id)
+            .in('project_id', toRemove)
+          if (delErr) throw delErr
+        }
+
         setUsers((prev) =>
           prev.map((u) =>
             u.id === form.id
@@ -211,26 +289,44 @@ export default function UsersPage() {
               : u
           )
         )
+        setMemberships((prev) => ({ ...prev, [form.id!]: form.project_ids }))
         setSuccessMessage(t('users.updated'))
       } else {
-        // Directly insert into public.users. A matching row must
-        // already exist in auth.users OR the Admin will invite via
-        // the Supabase dashboard afterwards.
-        const { data, error } = await supabase
-          .from('users')
-          .insert({
-            email: form.email,
+        // ── CREATE new user via admin-create-user edge function ──
+        const { data, error } = await supabase.functions.invoke('admin-create-user', {
+          body: {
+            email: form.email.trim().toLowerCase(),
+            password: form.password,
             full_name: form.full_name,
-            full_name_ar: form.full_name_ar || null,
+            full_name_ar: form.full_name_ar,
             role: form.role,
-            organization: form.organization || null,
-            phone: form.phone || null,
-            is_active: form.is_active,
-          })
-          .select()
-          .single()
-        if (error) throw error
-        if (data) setUsers((prev) => [data as User, ...prev])
+            organization: form.organization,
+            phone: form.phone,
+            project_ids: form.project_ids,
+          },
+        })
+        if (error) {
+          // Surface body of non-2xx response if present
+          let msg = error.message || 'Edge function failed'
+          try {
+            const ctx = (error as unknown as { context?: Response }).context
+            if (ctx) {
+              const body = await ctx.text()
+              const parsed = JSON.parse(body)
+              if (parsed?.error) msg = parsed.error
+            }
+          } catch {
+            /* ignore parse failures */
+          }
+          throw new Error(msg)
+        }
+        if (!data?.success) {
+          throw new Error(data?.error || 'Edge function failed')
+        }
+
+        const created = data.user as User
+        setUsers((prev) => [created, ...prev])
+        setMemberships((prev) => ({ ...prev, [created.id]: form.project_ids }))
         setSuccessMessage(t('users.created'))
       }
       setShowForm(false)
@@ -399,68 +495,77 @@ export default function UsersPage() {
                   <th className="px-4 py-3 text-start">{t('users.email')}</th>
                   <th className="px-4 py-3 text-start">{t('users.role')}</th>
                   <th className="px-4 py-3 text-start">{t('users.organization')}</th>
+                  <th className="px-4 py-3 text-start">Projects</th>
                   <th className="px-4 py-3 text-center">{t('users.status')}</th>
                   <th className="px-4 py-3 text-end">{t('users.actions')}</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((u) => (
-                  <tr key={u.id} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-gray-900">
-                        {isRTL ? u.full_name_ar || u.full_name : u.full_name}
-                      </div>
-                      {!isRTL && u.full_name_ar && (
-                        <div className="text-xs text-gray-500">{u.full_name_ar}</div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-gray-700 font-mono text-xs">{u.email}</td>
-                    <td className="px-4 py-3">
-                      <RolePill role={u.role} label={t(`roles.${u.role}`) || u.role} />
-                    </td>
-                    <td className="px-4 py-3 text-gray-700">{u.organization || '—'}</td>
-                    <td className="px-4 py-3 text-center">
-                      {u.is_active ? (
-                        <span
-                          className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium"
-                          style={{ backgroundColor: '#dcfce7', color: '#166534' }}
-                        >
-                          <CheckCircle2 className="w-3 h-3" />
-                          {t('users.active')}
-                        </span>
-                      ) : (
-                        <span
-                          className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium"
-                          style={{ backgroundColor: '#fee2e2', color: '#991b1b' }}
-                        >
-                          <XCircle className="w-3 h-3" />
-                          {t('users.inactive')}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-end">
-                      <div className="inline-flex items-center gap-2">
-                        <button
-                          onClick={() => startEdit(u)}
-                          className="p-1.5 rounded hover:bg-gray-100"
-                          title={t('users.editUser')}
-                        >
-                          <Edit3 className="w-4 h-4 text-gray-600" />
-                        </button>
-                        <button
-                          onClick={() => toggleActive(u)}
-                          className="text-xs px-2 py-1 rounded border"
-                          style={{
-                            borderColor: u.is_active ? '#c05728' : '#87ba26',
-                            color: u.is_active ? '#c05728' : '#87ba26',
-                          }}
-                        >
-                          {u.is_active ? t('users.deactivate') : t('users.activate')}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {filtered.map((u) => {
+                  const userProjects = (memberships[u.id] || [])
+                    .map((pid) => projects.find((p) => p.id === pid)?.code)
+                    .filter(Boolean)
+                  return (
+                    <tr key={u.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-gray-900">
+                          {isRTL ? u.full_name_ar || u.full_name : u.full_name}
+                        </div>
+                        {!isRTL && u.full_name_ar && (
+                          <div className="text-xs text-gray-500">{u.full_name_ar}</div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700 font-mono text-xs">{u.email}</td>
+                      <td className="px-4 py-3">
+                        <RolePill role={u.role} label={t(`roles.${u.role}`) || u.role} />
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">{u.organization || '—'}</td>
+                      <td className="px-4 py-3 text-gray-700 text-xs">
+                        {userProjects.length > 0 ? userProjects.join(', ') : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {u.is_active ? (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium"
+                            style={{ backgroundColor: '#dcfce7', color: '#166534' }}
+                          >
+                            <CheckCircle2 className="w-3 h-3" />
+                            {t('users.active')}
+                          </span>
+                        ) : (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium"
+                            style={{ backgroundColor: '#fee2e2', color: '#991b1b' }}
+                          >
+                            <XCircle className="w-3 h-3" />
+                            {t('users.inactive')}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-end">
+                        <div className="inline-flex items-center gap-2">
+                          <button
+                            onClick={() => startEdit(u)}
+                            className="p-1.5 rounded hover:bg-gray-100"
+                            title={t('users.editUser')}
+                          >
+                            <Edit3 className="w-4 h-4 text-gray-600" />
+                          </button>
+                          <button
+                            onClick={() => toggleActive(u)}
+                            className="text-xs px-2 py-1 rounded border"
+                            style={{
+                              borderColor: u.is_active ? '#c05728' : '#87ba26',
+                              color: u.is_active ? '#c05728' : '#87ba26',
+                            }}
+                          >
+                            {u.is_active ? t('users.deactivate') : t('users.activate')}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -474,7 +579,7 @@ export default function UsersPage() {
           onClick={closeForm}
         >
           <div
-            className="bg-white rounded-xl shadow-xl max-w-lg w-full"
+            className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div
@@ -514,13 +619,24 @@ export default function UsersPage() {
                   type="email"
                   value={form.email}
                   disabled={!!form.id}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  onChange={(e) => setForm({ ...form, email: e.target.value.toLowerCase() })}
                   className={cn(
                     'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#045859]',
                     form.id && 'bg-gray-50 text-gray-500'
                   )}
                 />
               </FormField>
+              {!form.id && (
+                <FormField label="Password" required>
+                  <input
+                    type="text"
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                    placeholder="At least 6 characters"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#045859] font-mono"
+                  />
+                </FormField>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <FormField label={t('users.role')} required>
                   <select
@@ -535,7 +651,7 @@ export default function UsersPage() {
                     ))}
                     {LEGACY_ROLES.map((r) => (
                       <option key={r} value={r}>
-                        {t(`roles.${r}`)}
+                        {t(`roles.${r}`)} (legacy)
                       </option>
                     ))}
                   </select>
@@ -567,6 +683,40 @@ export default function UsersPage() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#045859]"
                 />
               </FormField>
+
+              {/* Project assignments */}
+              {projects.length > 0 && (
+                <div>
+                  <div className="text-xs font-semibold text-gray-700 mb-2">
+                    Project Assignments
+                  </div>
+                  <div className="border border-gray-200 rounded-lg p-3 space-y-2 max-h-48 overflow-y-auto">
+                    {projects.map((p) => {
+                      const checked = form.project_ids.includes(p.id)
+                      return (
+                        <label
+                          key={p.id}
+                          className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 px-2 py-1 rounded"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleProjectAssignment(p.id)}
+                          />
+                          <span className="font-mono text-xs text-gray-500">{p.code}</span>
+                          <span className="text-gray-800">{isRTL ? p.name_ar : p.name}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                  {form.role === 'department_director' && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Note: Department Director is automatically attached to every project as
+                      global owner via a database trigger.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
             <div className="px-5 py-4 border-t border-gray-200 flex items-center justify-end gap-3">
               <button
