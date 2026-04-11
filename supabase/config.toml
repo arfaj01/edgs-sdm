@@ -1,0 +1,16 @@
+# Supabase project config — used by the Supabase CLI for `supabase link`
+# and `supabase functions deploy`. Keep in sync with the live project.
+
+project_id = "xrkklzyfyiplclspkegq"
+
+[functions.create-submittal]
+verify_jwt = true
+
+[functions.workflow-transition]
+verify_jwt = true
+
+[functions.dashboard-kpis]
+verify_jwt = true
+
+[functions.admin-create-user]
+verify_jwt = true
