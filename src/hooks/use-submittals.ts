@@ -187,7 +187,36 @@ export function useCreateSubmittal() {
         }
       );
 
-      if (error) throw error;
+      if (error) {
+        // Supabase wraps non-2xx edge-function responses in FunctionsHttpError
+        // whose generic message is "Edge Function returned a non-2xx status
+        // code". The real error body lives on `error.context`, which is the
+        // Response object. Surface the real message to the caller so the
+        // UI can render something useful instead of a generic wrapper.
+        let detail = error.message;
+        const ctx = (error as unknown as { context?: Response }).context;
+        if (ctx && typeof ctx === 'object' && 'json' in ctx) {
+          try {
+            const body = await ctx.clone().json();
+            if (body?.error) detail = String(body.error);
+            else if (body?.message) detail = String(body.message);
+          } catch {
+            try {
+              const txt = await ctx.clone().text();
+              if (txt) detail = txt;
+            } catch {
+              /* ignore */
+            }
+          }
+        }
+        throw new Error(detail);
+      }
+
+      // Backend returned 2xx but body may still contain a structured error
+      // (older versions of the function responded with { error } + 200).
+      if (data && typeof data === 'object' && 'error' in data && (data as { error: unknown }).error) {
+        throw new Error(String((data as { error: unknown }).error));
+      }
       return data as CreateSubmittalResponse;
     },
     onSuccess: (_, variables) => {
