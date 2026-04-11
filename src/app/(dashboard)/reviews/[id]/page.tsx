@@ -140,6 +140,8 @@ export default function ReviewPage() {
           status={submittal.status}
           stage={submittal.submittal_stage}
           submittalNumber={submittal.submittal_number}
+          submittedAt={submittal.submitted_at}
+          updatedAt={submittal.updated_at}
           assignedTo={null}
         />
 
@@ -147,6 +149,8 @@ export default function ReviewPage() {
         <WorkflowTimeline
           status={submittal.status}
           stage={submittal.submittal_stage}
+          submittedAt={submittal.submitted_at}
+          updatedAt={submittal.updated_at}
           className="mb-6"
         />
 

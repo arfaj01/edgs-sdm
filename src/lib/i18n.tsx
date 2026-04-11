@@ -15,7 +15,12 @@ interface I18nContextType {
   isRTL: boolean;
   setLanguage: (lang: Language) => void;
   toggleLanguage: () => void;
-  t: (key: string) => string;
+  /**
+   * Look up a translation by dotted key. Optionally pass a params object
+   * to interpolate `{name}` placeholders in the translated string.
+   *   t('reviewsQueue.dueInHour', { n: 4 }) → "Due in 4h"
+   */
+  t: (key: string, params?: Record<string, string | number>) => string;
 }
 
 const I18nContext = createContext<I18nContextType | undefined>(undefined);
@@ -57,9 +62,17 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     setLanguageState(prev => prev === 'ar' ? 'en' : 'ar');
   }, []);
 
-  const t = useCallback((key: string): string => {
-    return getNestedValue(translations[language], key);
-  }, [language]);
+  const t = useCallback(
+    (key: string, params?: Record<string, string | number>): string => {
+      const raw = getNestedValue(translations[language], key);
+      if (!params) return raw;
+      // Replace {name} placeholders with the corresponding param value.
+      return raw.replace(/\{(\w+)\}/g, (match, name) => {
+        return params[name] !== undefined ? String(params[name]) : match;
+      });
+    },
+    [language],
+  );
 
   const dir = language === 'ar' ? 'rtl' : 'ltr';
   const isRTL = language === 'ar';

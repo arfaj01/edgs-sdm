@@ -30,6 +30,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { StatCard } from '@/components/ui/stat-card';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { DataTable } from '@/components/ui/data-table';
+import { OverdueWidget } from '@/components/ui/overdue-widget';
 import { useI18n } from '@/lib/i18n';
 import { useDashboardKPIs } from '@/hooks/use-dashboard';
 import { useProjects } from '@/hooks/use-project';
@@ -154,6 +155,9 @@ export default function DashboardPage() {
 
       {/* Role-based landing section — shows each user the first thing they need to do */}
       {user && <RoleBasedHero role={user.role} />}
+
+      {/* Smart Workflow: overdue + approaching-due alert widget */}
+      {user && <OverdueWidget userRole={user.role} className="mb-6" />}
 
       {/* Project Selector */}
       {projects && projects.length > 1 && (

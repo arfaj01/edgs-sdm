@@ -516,6 +516,75 @@
     "saving": "Saving…",
     "savedSuccess": "Saved successfully",
     "savedError": "Something went wrong. Please try again.",
-    "cancelBtn": "Cancel"
+    "cancelBtn": "Cancel",
+    "overdueLabel": "Overdue"
+  },
+  "reviewsQueue": {
+    "title": "Review Queue",
+    "description": "Submittals waiting on your review. Items are auto-routed by stage and sorted by SLA.",
+    "pendingCount": "Pending",
+    "approachingCount": "Approaching due",
+    "overdueCount": "Overdue",
+    "colNumber": "Number",
+    "colDeliverable": "Deliverable",
+    "colStatus": "Status",
+    "colStage": "Stage",
+    "colDue": "Due",
+    "colAction": "Action",
+    "review": "Review",
+    "emptyTitle": "Nothing waiting on you",
+    "emptyDesc": "All submittals assigned to your role have been actioned.",
+    "dueInHour": "Due in {n}h",
+    "dueInDay": "Due in {n}d",
+    "overdueByHour": "Overdue by {n}h",
+    "overdueByDay": "Overdue by {n}d",
+    "stageStarted": "Stage started"
+  },
+  "approvalsQueue": {
+    "title": "Approvals Queue",
+    "description": "Submittals that have passed Technical + Quality review and need your final decision.",
+    "pendingCount": "Pending approval",
+    "approachingCount": "Approaching due",
+    "overdueCount": "Overdue",
+    "colNumber": "Number",
+    "colDeliverable": "Deliverable",
+    "colStatus": "Status",
+    "colDue": "Due",
+    "colAction": "Action",
+    "approve": "Open",
+    "emptyTitle": "No approvals pending",
+    "emptyDesc": "All submittals have been actioned at the approval stage.",
+    "dueInHour": "Due in {n}h",
+    "dueInDay": "Due in {n}d",
+    "overdueByHour": "Overdue by {n}h",
+    "overdueByDay": "Overdue by {n}d",
+    "stageStarted": "Stage started",
+    "deniedTitle": "Not available for your role",
+    "deniedDesc": "The approvals queue is restricted to Project Managers and Department Directors."
+  },
+  "notificationsPage": {
+    "title": "Notifications",
+    "description": "All workflow alerts, assignments, and status changes relevant to you.",
+    "unread": "Unread",
+    "markAllRead": "Mark all as read",
+    "markRead": "Mark read",
+    "open": "Open",
+    "emptyTitle": "No notifications",
+    "emptyDesc": "You're all caught up. New workflow events will appear here."
+  },
+  "overdueWidget": {
+    "overdueTitle": "{n} item(s) overdue",
+    "approachingTitle": "{n} item(s) approaching due",
+    "viewAll": "View all"
+  },
+  "workflowAuto": {
+    "actionApproved": "Approved",
+    "actionRejected": "Rejected",
+    "actionDraftSubmit": "Submit draft",
+    "actionRevisionRequired": "Revise and resubmit",
+    "actionTechnicalReview": "Technical Unit review",
+    "actionQualityReview": "Quality Unit review",
+    "actionPMApproval": "PM final approval",
+    "actionReturned": "Returned to submitter"
   }
 }

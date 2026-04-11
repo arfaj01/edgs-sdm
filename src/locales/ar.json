@@ -516,6 +516,75 @@
     "saving": "جارٍ الحفظ…",
     "savedSuccess": "تم الحفظ بنجاح",
     "savedError": "حدث خطأ. يرجى المحاولة مرة أخرى.",
-    "cancelBtn": "إلغاء"
+    "cancelBtn": "إلغاء",
+    "overdueLabel": "متأخر"
+  },
+  "reviewsQueue": {
+    "title": "قائمة المراجعات",
+    "description": "التقديمات بانتظار مراجعتك. يتم توجيه العناصر تلقائيًا حسب المرحلة وترتيبها حسب موعد الاستحقاق.",
+    "pendingCount": "قيد الانتظار",
+    "approachingCount": "قارب موعدها",
+    "overdueCount": "متأخر",
+    "colNumber": "الرقم",
+    "colDeliverable": "المخرج",
+    "colStatus": "الحالة",
+    "colStage": "المرحلة",
+    "colDue": "الاستحقاق",
+    "colAction": "الإجراء",
+    "review": "مراجعة",
+    "emptyTitle": "لا توجد عناصر بانتظارك",
+    "emptyDesc": "تمت معالجة جميع التقديمات المسندة لدورك.",
+    "dueInHour": "يستحق خلال {n} ساعة",
+    "dueInDay": "يستحق خلال {n} يوم",
+    "overdueByHour": "متأخر بـ {n} ساعة",
+    "overdueByDay": "متأخر بـ {n} يوم",
+    "stageStarted": "بدأت المرحلة"
+  },
+  "approvalsQueue": {
+    "title": "قائمة الاعتمادات",
+    "description": "التقديمات التي اجتازت مراجعة الوحدة الفنية ووحدة الجودة وتحتاج إلى قرارك النهائي.",
+    "pendingCount": "بانتظار الاعتماد",
+    "approachingCount": "قارب موعدها",
+    "overdueCount": "متأخر",
+    "colNumber": "الرقم",
+    "colDeliverable": "المخرج",
+    "colStatus": "الحالة",
+    "colDue": "الاستحقاق",
+    "colAction": "الإجراء",
+    "approve": "فتح",
+    "emptyTitle": "لا توجد اعتمادات معلقة",
+    "emptyDesc": "تمت معالجة جميع التقديمات في مرحلة الاعتماد.",
+    "dueInHour": "يستحق خلال {n} ساعة",
+    "dueInDay": "يستحق خلال {n} يوم",
+    "overdueByHour": "متأخر بـ {n} ساعة",
+    "overdueByDay": "متأخر بـ {n} يوم",
+    "stageStarted": "بدأت المرحلة",
+    "deniedTitle": "غير متاح لدورك",
+    "deniedDesc": "قائمة الاعتمادات متاحة لمدراء المشاريع ومديري الأقسام فقط."
+  },
+  "notificationsPage": {
+    "title": "الإشعارات",
+    "description": "جميع تنبيهات سير العمل والإسناد وتغييرات الحالة المتعلقة بك.",
+    "unread": "غير مقروءة",
+    "markAllRead": "تحديد الكل كمقروء",
+    "markRead": "تحديد كمقروء",
+    "open": "فتح",
+    "emptyTitle": "لا توجد إشعارات",
+    "emptyDesc": "لقد اطلعت على كل شيء. ستظهر أحداث سير العمل الجديدة هنا."
+  },
+  "overdueWidget": {
+    "overdueTitle": "{n} عنصر متأخر",
+    "approachingTitle": "{n} عنصر قارب موعده",
+    "viewAll": "عرض الكل"
+  },
+  "workflowAuto": {
+    "actionApproved": "معتمد",
+    "actionRejected": "مرفوض",
+    "actionDraftSubmit": "إرسال المسودة",
+    "actionRevisionRequired": "المراجعة وإعادة الإرسال",
+    "actionTechnicalReview": "مراجعة الوحدة الفنية",
+    "actionQualityReview": "مراجعة وحدة الجودة",
+    "actionPMApproval": "الاعتماد النهائي من مدير المشروع",
+    "actionReturned": "تمت الإعادة إلى المُقدِّم"
   }
 }

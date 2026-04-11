@@ -1,10 +1,14 @@
 'use client';
 
 import React from 'react';
-import { Check, Circle, X as XIcon, MinusCircle } from 'lucide-react';
+import { Check, Circle, X as XIcon, MinusCircle, AlertTriangle } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import type { SubmittalStatus, SubmittalStage } from '@/types/database';
+import {
+  computeWorkflowState,
+  formatTimeRemaining,
+} from '@/lib/workflow-sla';
 
 type StepState = 'completed' | 'current' | 'pending' | 'skipped' | 'rejected';
 
@@ -17,6 +21,9 @@ interface TimelineStep {
 interface WorkflowTimelineProps {
   status: SubmittalStatus;
   stage: SubmittalStage;
+  /** Optional — required for overdue highlighting on the current step. */
+  submittedAt?: string | null;
+  updatedAt?: string | null;
   className?: string;
 }
 
@@ -129,12 +136,14 @@ function StepIcon({ state }: { state: StepState }) {
   return null;
 }
 
-function stepCircleClass(state: StepState): string {
+function stepCircleClass(state: StepState, overdue = false): string {
   switch (state) {
     case 'completed':
       return 'bg-[#87ba26] border-[#87ba26]';
     case 'current':
-      return 'bg-[#045859] border-[#045859] ring-4 ring-[#e6f2f2]';
+      return overdue
+        ? 'bg-red-600 border-red-600 ring-4 ring-red-100 animate-pulse'
+        : 'bg-[#045859] border-[#045859] ring-4 ring-[#e6f2f2]';
     case 'rejected':
       return 'bg-red-600 border-red-600';
     case 'skipped':
@@ -150,15 +159,68 @@ function connectorClass(prevState: StepState): string {
   return 'bg-gray-200';
 }
 
-export function WorkflowTimeline({ status, stage, className }: WorkflowTimelineProps) {
+export function WorkflowTimeline({
+  status,
+  stage,
+  submittedAt,
+  updatedAt,
+  className,
+}: WorkflowTimelineProps) {
   const { t, isRTL } = useI18n();
   const steps = computeSteps(status, stage);
 
+  // Compute overdue/approaching state for the CURRENT step when timing
+  // data is provided. A non-null result adds a red AlertTriangle + pill.
+  const workflowState = (submittedAt !== undefined || updatedAt !== undefined)
+    ? computeWorkflowState({
+        status,
+        submittal_stage: stage,
+        submitted_at: submittedAt ?? null,
+        updated_at: updatedAt ?? submittedAt ?? new Date().toISOString(),
+      })
+    : null;
+  const remaining = workflowState
+    ? formatTimeRemaining(workflowState.hoursRemaining)
+    : null;
+
+  const dueLabel = (() => {
+    if (!remaining) return null;
+    if (remaining.overdue) {
+      return t(
+        `reviewsQueue.overdueBy${remaining.unit === 'day' ? 'Day' : 'Hour'}`,
+        { n: remaining.magnitude },
+      );
+    }
+    return t(
+      `reviewsQueue.dueIn${remaining.unit === 'day' ? 'Day' : 'Hour'}`,
+      { n: remaining.magnitude },
+    );
+  })();
+
   return (
     <div className={cn('bg-white rounded-lg shadow p-6', className)} dir={isRTL ? 'rtl' : 'ltr'}>
-      <h3 className="text-sm font-semibold text-gray-700 mb-4">
-        {t('workflow.timelineTitle') || t('ux.overallStatus')}
-      </h3>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-gray-700">
+          {t('workflow.timelineTitle') || t('ux.overallStatus')}
+        </h3>
+        {dueLabel && (
+          <span
+            className={cn(
+              'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium',
+              workflowState?.overdue
+                ? 'bg-red-100 text-red-700'
+                : workflowState?.approaching
+                  ? 'bg-amber-100 text-amber-700'
+                  : 'bg-gray-100 text-gray-700',
+            )}
+          >
+            {workflowState?.overdue ? (
+              <AlertTriangle className="w-3 h-3" />
+            ) : null}
+            {dueLabel}
+          </span>
+        )}
+      </div>
 
       {/* Desktop horizontal layout */}
       <div className="hidden md:block">
@@ -171,7 +233,7 @@ export function WorkflowTimeline({ status, stage, className }: WorkflowTimelineP
                   <div
                     className={cn(
                       'w-9 h-9 rounded-full border-2 flex items-center justify-center transition-all',
-                      stepCircleClass(step.state)
+                      stepCircleClass(step.state, step.state === 'current' && !!workflowState?.overdue)
                     )}
                   >
                     <StepIcon state={step.state} />
@@ -216,7 +278,7 @@ export function WorkflowTimeline({ status, stage, className }: WorkflowTimelineP
               <div
                 className={cn(
                   'w-8 h-8 rounded-full border-2 flex items-center justify-center',
-                  stepCircleClass(step.state)
+                  stepCircleClass(step.state, step.state === 'current' && !!workflowState?.overdue)
                 )}
               >
                 <StepIcon state={step.state} />
