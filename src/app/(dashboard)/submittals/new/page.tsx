@@ -50,7 +50,7 @@ const APPROVAL_ROLES: UserRole[] = [
   'owner',
   'project_coordinator',
 ]
-import { AlertCircle, Plus, Trash2, FileText, Save, Send, CheckCircle2 } from 'lucide-react'
+import { AlertCircle, Plus, Trash2, FileText, Save, Send, CheckCircle2, Loader2 } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────
 // Constants / option lists
@@ -151,7 +151,34 @@ function ApprovalFormPage() {
   const [lineItems, setLineItems] = useState<LineItemDraft[]>([])
   const [errors, setErrors] = useState<string[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitMode, setSubmitMode] = useState<'draft' | 'submit' | null>(null)
   const [successId, setSuccessId] = useState<string | null>(null)
+
+  // Unwrap any error shape the Supabase client might return. The JS client
+  // wraps Edge Function failures in a FunctionsHttpError whose message is
+  // "Edge Function returned a non-2xx status code" — the actual message
+  // lives on `error.context.body` or the response body itself. We also
+  // fall back through plain Error, string, and structured objects.
+  const extractErrorMessage = async (err: unknown): Promise<string> => {
+    if (!err) return t('approvalForm.createError')
+    // Supabase FunctionsHttpError carries a Response in `context`
+    const anyErr = err as { context?: Response; message?: string }
+    if (anyErr?.context && typeof anyErr.context === 'object' && 'json' in anyErr.context) {
+      try {
+        const body = await (anyErr.context as Response).clone().json()
+        if (body?.error) return String(body.error)
+        if (body?.message) return String(body.message)
+      } catch {
+        try {
+          const txt = await (anyErr.context as Response).clone().text()
+          if (txt) return txt
+        } catch { /* ignore */ }
+      }
+    }
+    if (err instanceof Error) return err.message
+    if (typeof err === 'string') return err
+    try { return JSON.stringify(err) } catch { return String(err) }
+  }
 
   // ── derived ─────────────────────────────────────────────
   const selectedDeliverable = useMemo(
@@ -281,14 +308,30 @@ function ApprovalFormPage() {
 
   // ── submit handlers ─────────────────────────────────────
   const handleSave = async (submit: boolean) => {
-    if (!validate()) return
+    if (!validate()) {
+      // Scroll the errors banner into view so the user sees what's wrong
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      })
+      return
+    }
     setIsSubmitting(true)
+    setSubmitMode(submit ? 'submit' : 'draft')
+    setErrors([])
     try {
       const resp = await createSubmittal.mutateAsync({
         deliverable_id: selectedDeliverableId,
         purpose: purpose as SubmittalPurpose,
         notes: notes || undefined,
       })
+
+      if (!resp?.id) {
+        throw new Error('create-submittal returned no id')
+      }
+
+      // Persist extended columns (disciplines, notes_ar, request_type)
+      // and line items. These calls hit the database directly through
+      // the user-context Supabase client, so RLS applies.
       await persistExtended(resp.id)
 
       if (submit) {
@@ -299,8 +342,11 @@ function ApprovalFormPage() {
           })
         } catch (e) {
           // If transition fails, the submittal still exists as draft —
-          // surface the error but don't throw away user work.
+          // log but don't throw away user work.
           console.error('Workflow transition failed:', e)
+          const transitionMsg = await extractErrorMessage(e)
+          setErrors([`${t('approvalForm.createError')}: ${transitionMsg}`])
+          // Still land on success page because the submittal exists
         }
       }
 
@@ -311,10 +357,16 @@ function ApprovalFormPage() {
         router.push(`/deliverables/${selectedDeliverableId}`)
       }, 8000)
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : t('approvalForm.createError')
+      console.error('Submit failed:', e)
+      const msg = await extractErrorMessage(e)
       setErrors([msg])
+      // Scroll error into view
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      })
     } finally {
       setIsSubmitting(false)
+      setSubmitMode(null)
     }
   }
 
@@ -360,24 +412,37 @@ function ApprovalFormPage() {
         description={t('approvalForm.pageDescription')}
       />
 
-      {/* Errors */}
+      {/* Errors — prominent, dismissible, always visible at top of form */}
       {errors.length > 0 && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+        <div
+          className="p-4 bg-red-50 border-2 border-red-300 rounded-lg shadow-sm"
+          role="alert"
+          aria-live="assertive"
+          data-testid="submit-error-banner"
+        >
           <div className="flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <AlertCircle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
-              <h3 className="font-medium text-red-900 mb-2">
+              <h3 className="font-semibold text-red-900 mb-2">
                 {t('submittal.fixErrors')}
               </h3>
               <ul className="space-y-1 text-sm text-red-800">
                 {errors.map((e, i) => (
                   <li key={i} className="flex items-start gap-2">
                     <span className="text-red-600 mt-1">•</span>
-                    <span>{e}</span>
+                    <span className="break-words">{e}</span>
                   </li>
                 ))}
               </ul>
             </div>
+            <button
+              type="button"
+              onClick={() => setErrors([])}
+              className="text-red-600 hover:text-red-800 text-sm font-medium"
+              aria-label="Dismiss errors"
+            >
+              ✕
+            </button>
           </div>
         </div>
       )}
@@ -754,37 +819,52 @@ function ApprovalFormPage() {
 
       {/* ─────────────── Actions ─────────────── */}
       <div className="sticky bottom-0 bg-white border-t border-gray-200 py-4 -mx-6 lg:-mx-8 px-6 lg:px-8 z-20">
-        <div className="flex flex-wrap items-center gap-3 max-w-7xl mx-auto">
+        <div
+          className="flex flex-wrap items-center gap-3 max-w-7xl mx-auto"
+          aria-busy={isSubmitting}
+        >
           <button
             type="button"
             onClick={() => handleSave(false)}
             disabled={isSubmitting}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium text-gray-700 border border-gray-300 hover:bg-gray-50 transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium text-gray-700 border border-gray-300 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            data-testid="save-draft-btn"
           >
-            <Save className="w-4 h-4" />
-            {t('approvalForm.saveDraft')}
+            {submitMode === 'draft' ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            {submitMode === 'draft' ? t('submittal.creating') : t('approvalForm.saveDraft')}
           </button>
           <button
             type="button"
             onClick={() => handleSave(true)}
             disabled={isSubmitting}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium text-white transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ backgroundColor: '#045859' }}
+            data-testid="submit-review-btn"
           >
-            <Send className="w-4 h-4" />
-            {isSubmitting ? t('submittal.creating') : t('approvalForm.submitForReview')}
+            {submitMode === 'submit' ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Send className="w-4 h-4" />
+            )}
+            {submitMode === 'submit' ? t('submittal.creating') : t('approvalForm.submitForReview')}
           </button>
           <button
             type="button"
             onClick={() => router.back()}
-            className="px-5 py-2.5 rounded-lg font-medium text-gray-700 hover:bg-gray-50 transition-colors ms-auto"
+            disabled={isSubmitting}
+            className="px-5 py-2.5 rounded-lg font-medium text-gray-700 hover:bg-gray-50 transition-colors ms-auto disabled:opacity-50"
           >
             {t('common.cancel')}
           </button>
           <button
             type="button"
             onClick={() => window.print()}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium text-gray-700 border border-gray-300 hover:bg-gray-50 transition-colors"
+            disabled={isSubmitting}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium text-gray-700 border border-gray-300 hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
             <FileText className="w-4 h-4" />
             {t('approvalForm.printForm')}
