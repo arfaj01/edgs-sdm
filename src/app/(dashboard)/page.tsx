@@ -24,6 +24,8 @@ import {
   CartesianGrid,
 } from 'recharts';
 
+import Link from 'next/link';
+import { FilePlus, ClipboardList, ShieldCheck, Inbox } from 'lucide-react';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatCard } from '@/components/ui/stat-card';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -31,11 +33,13 @@ import { DataTable } from '@/components/ui/data-table';
 import { useI18n } from '@/lib/i18n';
 import { useDashboardKPIs } from '@/hooks/use-dashboard';
 import { useProjects } from '@/hooks/use-project';
+import { useUser } from '@/hooks/use-user';
 import { formatDate, getActionCodeLabel } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 
 export default function DashboardPage() {
   const { t } = useI18n();
+  const { user } = useUser();
   const { data: projects, isLoading: projectsLoading } = useProjects();
   const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>();
   const { data: kpiData, isLoading: kpisLoading } = useDashboardKPIs(selectedProjectId);
@@ -147,6 +151,9 @@ export default function DashboardPage() {
         titleAr="لوحة التحكم"
         description={t('dashboard.description')}
       />
+
+      {/* Role-based landing section — shows each user the first thing they need to do */}
+      {user && <RoleBasedHero role={user.role} />}
 
       {/* Project Selector */}
       {projects && projects.length > 1 && (
@@ -308,4 +315,97 @@ export default function DashboardPage() {
       )}
     </div>
   );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Role-based hero — shows each role the primary action they need
+// ─────────────────────────────────────────────────────────────
+function RoleBasedHero({ role }: { role: string }) {
+  const { t } = useI18n();
+
+  if (role === 'submitter') {
+    return (
+      <div className="rounded-lg border-2 border-[#045859]/20 bg-gradient-to-r from-[#e6f2f2] to-white p-6 shadow-sm">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-lg bg-[#045859] flex items-center justify-center flex-shrink-0">
+              <FilePlus className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-[#045859]">{t('ux.dashboardSubmitter')}</h2>
+              <p className="text-sm text-gray-600 mt-1">{t('ux.dashboardSubmitterDesc')}</p>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <Link
+              href="/submittals/new"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#045859] text-white font-semibold text-sm hover:bg-[#034849] transition-colors"
+            >
+              <FilePlus className="w-4 h-4" />
+              {t('ux.dashboardNewSubmittal')}
+            </Link>
+            <Link
+              href="/deliverables"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-[#045859] text-[#045859] font-semibold text-sm hover:bg-[#e6f2f2] transition-colors"
+            >
+              {t('ux.dashboardViewAll')}
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (role === 'technical_unit' || role === 'quality_unit' || role === 'project_coordinator') {
+    return (
+      <div className="rounded-lg border-2 border-[#045859]/20 bg-gradient-to-r from-[#e6f2f2] to-white p-6 shadow-sm">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-lg bg-[#045859] flex items-center justify-center flex-shrink-0">
+              <ClipboardList className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-[#045859]">{t('ux.dashboardReviewer')}</h2>
+              <p className="text-sm text-gray-600 mt-1">{t('ux.dashboardReviewerDesc')}</p>
+            </div>
+          </div>
+          <Link
+            href="/deliverables"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#045859] text-white font-semibold text-sm hover:bg-[#034849] transition-colors"
+          >
+            <Inbox className="w-4 h-4" />
+            {t('ux.dashboardViewAll')}
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (role === 'project_manager') {
+    return (
+      <div className="rounded-lg border-2 border-[#045859]/20 bg-gradient-to-r from-[#e6f2f2] to-white p-6 shadow-sm">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-lg bg-[#045859] flex items-center justify-center flex-shrink-0">
+              <ShieldCheck className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-[#045859]">{t('ux.dashboardPM')}</h2>
+              <p className="text-sm text-gray-600 mt-1">{t('ux.dashboardPMDesc')}</p>
+            </div>
+          </div>
+          <Link
+            href="/deliverables"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#045859] text-white font-semibold text-sm hover:bg-[#034849] transition-colors"
+          >
+            <Inbox className="w-4 h-4" />
+            {t('ux.dashboardViewAll')}
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // admin / director / legacy — no hero, they already have the full sidebar
+  return null;
 }

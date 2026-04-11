@@ -6,6 +6,8 @@ import { useSubmittal, useSupabase, useUser } from '@/hooks';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { ActionCodeBadge } from '@/components/ui/action-code-badge';
+import { SmartHeader } from '@/components/ui/smart-header';
+import { WorkflowTimeline } from '@/components/ui/workflow-timeline';
 import { useI18n } from '@/lib/i18n';
 import { formatDate, formatDateTime, formatFileSize, cn } from '@/lib/utils';
 import type { ActionCode } from '@/types/database';
@@ -26,11 +28,13 @@ export default function ReviewPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Context-aware action buttons — reviewers (TU/QU) never get reject (D).
+  // That trigger lives on the PM approvals page. Here we only show actions
+  // the current role can actually perform.
   const ACTION_CODES: Array<{ code: ActionCode; color: string }> = [
     { code: 'A', color: 'green' },
     { code: 'B', color: 'amber' },
     { code: 'C', color: 'orange' },
-    { code: 'D', color: 'red' },
   ];
 
   if (isLoading) {
@@ -131,6 +135,21 @@ export default function ReviewPage() {
       />
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Smart Header — status / stage / assignee strip */}
+        <SmartHeader
+          status={submittal.status}
+          stage={submittal.submittal_stage}
+          submittalNumber={submittal.submittal_number}
+          assignedTo={null}
+        />
+
+        {/* Workflow Timeline — visual progress */}
+        <WorkflowTimeline
+          status={submittal.status}
+          stage={submittal.submittal_stage}
+          className="mb-6"
+        />
+
         {submitSuccess && (
           <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-start gap-3">
             <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
@@ -246,10 +265,15 @@ export default function ReviewPage() {
             </div>
             <div className="px-6 py-6">
               <div className="mb-8">
-                <h3 className="text-base font-semibold text-gray-900 mb-4">{t('review.selectActionCode')}</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <h3 className="text-base font-semibold text-gray-900 mb-2">
+                  {user?.role === 'technical_unit' ? t('ux.tuActionLabel') :
+                   user?.role === 'quality_unit' ? t('ux.quActionLabel') :
+                   t('review.selectActionCode')}
+                </h3>
+                <p className="text-xs text-gray-500 mb-4">{t('ux.hiddenActionsHint')}</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {ACTION_CODES.map((item) => {
-                    const isDisabled = item.code === 'D' && !isPM;
+                    const isDisabled = false;
                     const isSelected = selectedActionCode === item.code;
                     const bgColor = { green: 'bg-green-50 border-green-200', amber: 'bg-amber-50 border-amber-200', orange: 'bg-orange-50 border-orange-200', red: 'bg-red-50 border-red-200' }[item.color];
                     const textColor = { green: 'text-green-900', amber: 'text-amber-900', orange: 'text-orange-900', red: 'text-red-900' }[item.color];
@@ -295,13 +319,13 @@ export default function ReviewPage() {
                 <button
                   onClick={handleSubmitReview}
                   disabled={!selectedActionCode || isSubmitting}
-                  className={cn('px-6 py-2 rounded-lg font-medium transition-colors text-white disabled:bg-gray-400',
-                    selectedActionCode === 'C' ? 'bg-orange-600 hover:bg-orange-700' :
-                    selectedActionCode === 'D' ? 'bg-red-600 hover:bg-red-700' : ''
+                  className={cn('px-6 py-2 rounded-lg font-medium transition-colors text-white disabled:bg-gray-400 inline-flex items-center gap-2',
+                    selectedActionCode === 'C' ? 'bg-orange-600 hover:bg-orange-700' : ''
                   )}
                   style={!selectedActionCode || selectedActionCode === 'A' || selectedActionCode === 'B' ? { backgroundColor: '#045859' } : {}}
                 >
-                  {isSubmitting ? t('common.loading') : t('review.submit')}
+                  {isSubmitting && <Clock className="w-4 h-4 animate-spin" />}
+                  {isSubmitting ? t('ux.submitting') : t('review.submit')}
                 </button>
               </div>
             </div>

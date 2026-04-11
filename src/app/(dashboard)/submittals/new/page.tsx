@@ -24,6 +24,7 @@
 import { Suspense, useMemo, useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { PageHeader } from '@/components/ui/page-header'
+import { StepIndicator } from '@/components/ui/step-indicator'
 import { useI18n } from '@/lib/i18n'
 import { useDeliverables, useUser, useCreateSubmittal, useWorkflowTransition } from '@/hooks'
 import { useSupabase } from '@/hooks/use-supabase'
@@ -412,6 +413,17 @@ function ApprovalFormPage() {
         description={t('approvalForm.pageDescription')}
       />
 
+      {/* Step indicator — A through E (mandatory sections). F-H are reviewer-only. */}
+      <StepIndicator
+        steps={[
+          { letter: 'A', labelKey: 'approvalForm.stepHeader', active: !selectedDeliverableId, completed: !!selectedDeliverableId },
+          { letter: 'B', labelKey: 'approvalForm.stepPurpose', active: !!selectedDeliverableId && !purpose, completed: !!selectedDeliverableId && !!purpose },
+          { letter: 'C', labelKey: 'approvalForm.stepDisciplines', active: !!purpose && disciplines.length === 0, completed: !!purpose && disciplines.length > 0 },
+          { letter: 'D', labelKey: 'approvalForm.stepLineItems', active: disciplines.length > 0 && lineItems.length === 0, completed: lineItems.length > 0 },
+          { letter: 'E', labelKey: 'approvalForm.stepNotes', active: lineItems.length > 0, completed: false },
+        ]}
+      />
+
       {/* Errors — prominent, dismissible, always visible at top of form */}
       {errors.length > 0 && (
         <div
@@ -451,6 +463,7 @@ function ApprovalFormPage() {
       <FormSection
         letter="A"
         title={t('approvalForm.sectionHeader')}
+        hint={t('approvalForm.sectionHeaderHint')}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <ReadOnlyField
@@ -506,7 +519,7 @@ function ApprovalFormPage() {
       </FormSection>
 
       {/* ─────────────── SECTION B: Purpose ─────────────── */}
-      <FormSection letter="B" title={t('approvalForm.sectionPurpose')}>
+      <FormSection letter="B" title={t('approvalForm.sectionPurpose')} hint={t('approvalForm.sectionPurposeHint')}>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {SUBMITTAL_PURPOSES.map((p) => (
             <label

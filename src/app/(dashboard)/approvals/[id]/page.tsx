@@ -6,16 +6,18 @@ import { useSubmittal, useSupabase } from '@/hooks';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { ActionCodeBadge } from '@/components/ui/action-code-badge';
+import { SmartHeader } from '@/components/ui/smart-header';
+import { WorkflowTimeline } from '@/components/ui/workflow-timeline';
 import { useI18n } from '@/lib/i18n';
 import { formatDate, formatDateTime, formatFileSize, cn } from '@/lib/utils';
 import type { ActionCode } from '@/types/database';
 import { Download, CheckCircle, AlertCircle, Clock } from 'lucide-react';
 
-const ACTION_CODES: Array<{ code: ActionCode; color: string }> = [
-  { code: 'A', color: 'green' },
-  { code: 'B', color: 'amber' },
-  { code: 'C', color: 'orange' },
-  { code: 'D', color: 'red' },
+// PM approval: simplified to 2 final outcomes — Approve (A) or Reject (D).
+// Intermediate codes (B/C) are reviewer-only.
+const ACTION_CODES: Array<{ code: ActionCode; color: string; labelKey: string }> = [
+  { code: 'A', color: 'green', labelKey: 'ux.pmFinalApprove' },
+  { code: 'D', color: 'red', labelKey: 'ux.pmFinalReject' },
 ];
 
 export default function ApprovalPage() {
@@ -93,6 +95,21 @@ export default function ApprovalPage() {
       />
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Smart Header — status / stage / assignee strip */}
+        <SmartHeader
+          status={submittal.status}
+          stage={submittal.submittal_stage}
+          submittalNumber={submittal.submittal_number}
+          assignedTo={null}
+        />
+
+        {/* Workflow Timeline — visual progress */}
+        <WorkflowTimeline
+          status={submittal.status}
+          stage={submittal.submittal_stage}
+          className="mb-6"
+        />
+
         {submitSuccess && (
           <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-start gap-3">
             <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
@@ -240,8 +257,9 @@ export default function ApprovalPage() {
             </div>
             <div className="px-6 py-6">
               <div className="mb-8">
-                <h3 className="text-base font-semibold text-gray-900 mb-4">{t('approval.selectFinalAction')}</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <h3 className="text-base font-semibold text-gray-900 mb-2">{t('ux.pmActionLabel')}</h3>
+                <p className="text-xs text-gray-500 mb-4">{t('ux.hiddenActionsHint')}</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {ACTION_CODES.map((item) => {
                     const isSelected = selectedActionCode === item.code;
                     const bgColor = { green: 'bg-green-50 border-green-200', amber: 'bg-amber-50 border-amber-200', orange: 'bg-orange-50 border-orange-200', red: 'bg-red-50 border-red-200' }[item.color];
@@ -252,11 +270,11 @@ export default function ApprovalPage() {
                       <button
                         key={item.code}
                         onClick={() => setSelectedActionCode(item.code)}
-                        className={cn('p-4 rounded-lg border-2 transition-all', isSelected ? `${bgColor} ${borderColor} ring-2 ring-offset-2` : 'border-gray-200 hover:border-gray-300')}
+                        className={cn('p-5 rounded-lg border-2 transition-all', isSelected ? `${bgColor} ${borderColor} ring-2 ring-offset-2` : 'border-gray-200 hover:border-gray-300')}
                         style={{ textAlign: 'start' }}
                       >
-                        <div className={`font-bold text-lg mb-1 ${textColor}`}>{item.code}</div>
-                        <div className={`font-semibold text-sm ${textColor} mb-1`}>{t(`actions.${item.code}`)}</div>
+                        <div className={`font-bold text-lg mb-1 ${textColor}`}>{t(item.labelKey)}</div>
+                        <div className={`font-semibold text-xs ${textColor} mb-1`}>{t(`actions.${item.code}`)}</div>
                         <div className="text-xs text-gray-600">{t(`actions.${item.code}_desc`)}</div>
                       </button>
                     );
@@ -282,12 +300,13 @@ export default function ApprovalPage() {
                 <button
                   onClick={handleSubmitApproval}
                   disabled={!selectedActionCode || isSubmitting}
-                  className={cn('px-6 py-2 rounded-lg font-medium transition-colors text-white disabled:bg-gray-400',
+                  className={cn('px-6 py-2 rounded-lg font-medium transition-colors text-white disabled:bg-gray-400 inline-flex items-center gap-2',
                     selectedActionCode === 'D' ? 'bg-red-600 hover:bg-red-700' : ''
                   )}
                   style={selectedActionCode !== 'D' ? { backgroundColor: '#045859' } : {}}
                 >
-                  {isSubmitting ? t('common.loading') : selectedActionCode === 'D' ? t('approval.rejectReturn') : t('approval.approve')}
+                  {isSubmitting && <Clock className="w-4 h-4 animate-spin" />}
+                  {isSubmitting ? t('ux.submitting') : selectedActionCode === 'D' ? t('ux.pmFinalReject') : t('ux.pmFinalApprove')}
                 </button>
               </div>
             </div>
