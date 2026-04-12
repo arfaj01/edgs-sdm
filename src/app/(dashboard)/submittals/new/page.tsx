@@ -51,7 +51,9 @@ const APPROVAL_ROLES: UserRole[] = [
   'owner',
   'project_coordinator',
 ]
-import { AlertCircle, Plus, Trash2, FileText, Save, Send, CheckCircle2, Loader2 } from 'lucide-react'
+import { AlertCircle, Plus, Trash2, FileText, Save, Send, CheckCircle2, Loader2, Link2 } from 'lucide-react'
+import { FileUpload } from '@/components/ui/file-upload'
+import type { UploadedFile } from '@/components/ui/file-upload'
 
 // ─────────────────────────────────────────────────────────────
 // Constants / option lists
@@ -150,6 +152,8 @@ function ApprovalFormPage() {
   const [specializedName, setSpecializedName] = useState('')
   const [specializedRemarks, setSpecializedRemarks] = useState('')
   const [lineItems, setLineItems] = useState<LineItemDraft[]>([])
+  const [fileUrl, setFileUrl] = useState('')
+  const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null)
   const [errors, setErrors] = useState<string[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitMode, setSubmitMode] = useState<'draft' | 'submit' | null>(null)
@@ -280,6 +284,8 @@ function ApprovalFormPage() {
         notes: notes || null,
         notes_ar: notesAr || null,
         request_type: requestType,
+        file_url: fileUrl || null,
+        file_attachment_path: uploadedFile?.path || null,
       })
       .eq('id', submittalId)
     if (updErr) {
@@ -754,6 +760,56 @@ function ApprovalFormPage() {
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#045859] text-base"
             dir={isRTL ? 'rtl' : 'ltr'}
           />
+        </div>
+      </FormSection>
+
+      {/* ─────────────── ATTACHMENTS: File Upload + External Link ─────────────── */}
+      <FormSection
+        letter=""
+        title={t('approvalForm.fileUpload')}
+        hint={t('common.optional')}
+      >
+        <div className="space-y-5">
+          {/* File upload (200 MB max, drag & drop) */}
+          <div>
+            <label className="block text-sm font-medium text-gray-900 mb-2">
+              {t('approvalForm.fileUpload')}
+            </label>
+            <p className="text-xs text-gray-500 mb-3">{t('approvalForm.fileUploadHint')}</p>
+            <FileUpload
+              onUploaded={(f) => setUploadedFile(f)}
+              onRemoved={() => setUploadedFile(null)}
+              value={uploadedFile}
+              submittalId={selectedDeliverableId || undefined}
+              disabled={isSubmitting}
+            />
+          </div>
+
+          {/* External file link */}
+          <div>
+            <label className="block text-sm font-medium text-gray-900 mb-2">
+              <span className="inline-flex items-center gap-1.5">
+                <Link2 className="w-4 h-4 text-gray-500" />
+                {t('approvalForm.fileLink')}
+              </span>
+              <span className="text-xs text-gray-500 font-normal ms-2">
+                ({t('common.optional')})
+              </span>
+            </label>
+            <p className="text-xs text-gray-500 mb-2">{t('approvalForm.fileLinkHint')}</p>
+            <input
+              type="url"
+              value={fileUrl}
+              onChange={(e) => setFileUrl(e.target.value)}
+              placeholder={t('approvalForm.fileLinkPlaceholder')}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#045859] text-sm"
+              dir="ltr"
+              disabled={isSubmitting}
+            />
+            {fileUrl && !/^https?:\/\/.+/.test(fileUrl) && (
+              <p className="mt-1 text-xs text-red-500">{t('approvalForm.fileLinkInvalid')}</p>
+            )}
+          </div>
         </div>
       </FormSection>
 

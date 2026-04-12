@@ -332,7 +332,7 @@ export default function DeliverablesPage() {
         <div className="flex items-center gap-2 mb-3">
           <Filter className="w-4 h-4" style={{ color: '#045859' }} />
           <h3 className="text-sm font-semibold text-gray-700">
-            {isRTL ? 'عوامل التصفية' : 'Filters'}
+            {t('deliverables.filters')}
           </h3>
           {hasActiveFilters && (
             <button

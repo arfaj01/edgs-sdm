@@ -226,7 +226,7 @@ export default function UsersPage() {
       return
     }
     if (!form.id && (!form.password || form.password.length < 6)) {
-      setFormError('Password must be at least 6 characters')
+      setFormError(t('users.passwordMinLength'))
       return
     }
 
@@ -495,7 +495,7 @@ export default function UsersPage() {
                   <th className="px-4 py-3 text-start">{t('users.email')}</th>
                   <th className="px-4 py-3 text-start">{t('users.role')}</th>
                   <th className="px-4 py-3 text-start">{t('users.organization')}</th>
-                  <th className="px-4 py-3 text-start">Projects</th>
+                  <th className="px-4 py-3 text-start">{t('users.projects')}</th>
                   <th className="px-4 py-3 text-center">{t('users.status')}</th>
                   <th className="px-4 py-3 text-end">{t('users.actions')}</th>
                 </tr>
@@ -627,12 +627,12 @@ export default function UsersPage() {
                 />
               </FormField>
               {!form.id && (
-                <FormField label="Password" required>
+                <FormField label={t('users.passwordLabel')} required>
                   <input
                     type="text"
                     value={form.password}
                     onChange={(e) => setForm({ ...form, password: e.target.value })}
-                    placeholder="At least 6 characters"
+                    placeholder={t('users.passwordPlaceholder')}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#045859] font-mono"
                   />
                 </FormField>
@@ -688,7 +688,7 @@ export default function UsersPage() {
               {projects.length > 0 && (
                 <div>
                   <div className="text-xs font-semibold text-gray-700 mb-2">
-                    Project Assignments
+                    {t('users.projectAssignments')}
                   </div>
                   <div className="border border-gray-200 rounded-lg p-3 space-y-2 max-h-48 overflow-y-auto">
                     {projects.map((p) => {
@@ -711,8 +711,7 @@ export default function UsersPage() {
                   </div>
                   {form.role === 'department_director' && (
                     <p className="text-xs text-gray-500 mt-1">
-                      Note: Department Director is automatically attached to every project as
-                      global owner via a database trigger.
+                      {t('users.projectDirectorNote')}
                     </p>
                   )}
                 </div>

@@ -162,6 +162,8 @@ export interface Submittal {
   request_type: RequestType; // added in 04-workflow-v2 — study | execution
   notes: string | null;
   notes_ar: string | null;
+  file_url: string | null; // External file link — added in migration 009
+  file_attachment_path: string | null; // Supabase Storage path — added in migration 009
   created_at: string; // timestamp
   updated_at: string; // timestamp
   deleted_at: string | null; // timestamp

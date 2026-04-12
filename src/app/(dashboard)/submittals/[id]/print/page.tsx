@@ -446,6 +446,28 @@ export default function PrintSubmittalPage() {
           </div>
         </Section>
 
+        {/* ─── Attachments (if present) ─── */}
+        {(submittal.file_url || submittal.file_attachment_path) && (
+          <Section letter="" title={t('approvalForm.fileUpload')}>
+            <div className="text-xs space-y-2">
+              {submittal.file_attachment_path && (
+                <div className="flex items-center gap-2 p-2 border border-gray-200 rounded" style={{ backgroundColor: '#fafafa' }}>
+                  <span className="text-[10px] font-semibold text-gray-500">{isRTL ? 'ملف مرفق:' : 'Attached File:'}</span>
+                  <span className="text-[11px] text-gray-800 font-mono">
+                    {submittal.file_attachment_path.split('/').pop() || submittal.file_attachment_path}
+                  </span>
+                </div>
+              )}
+              {submittal.file_url && (
+                <div className="flex items-center gap-2 p-2 border border-gray-200 rounded" style={{ backgroundColor: '#fafafa' }}>
+                  <span className="text-[10px] font-semibold text-gray-500">{isRTL ? 'رابط خارجي:' : 'External Link:'}</span>
+                  <span className="text-[11px] text-gray-800 break-all" dir="ltr">{submittal.file_url}</span>
+                </div>
+              )}
+            </div>
+          </Section>
+        )}
+
         {/* ─── Section F: Specialized Consultant ─── */}
         <Section letter="F" title={t('approvalForm.sectionSpecializedConsultant')}>
           <div className="text-xs">
