@@ -47,42 +47,34 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex" dir={isRTL ? 'rtl' : 'ltr'}>
-      {/* Left panel — branding */}
+      {/* Left panel — ministry branding */}
       <div
         className="hidden lg:flex lg:w-[52%] relative flex-col items-center justify-center p-12"
-        style={{
-          background: 'linear-gradient(160deg, #034040 0%, #045859 40%, #056565 70%, #03403f 100%)',
-        }}
+        style={{ backgroundColor: '#f0f5f0' }}
       >
-        {/* Decorative pattern overlay */}
-        <div
-          className="absolute inset-0 opacity-[0.04]"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ffffff' fill-opacity='1' fill-rule='evenodd'%3E%3Cpath d='M30 0L60 30L30 60L0 30z' /%3E%3C/g%3E%3C/svg%3E")`,
-            backgroundSize: '30px 30px',
-          }}
-        />
+        {/* Subtle decorative border accent at the side */}
+        <div className="absolute top-0 bottom-0 right-0 w-1" style={{ backgroundColor: '#045859' }} />
 
-        <div className="relative z-10 max-w-lg text-center flex flex-col items-center justify-center">
-          {/* Ministry logo — displayed with white filter for visibility on dark background */}
+        <div className="relative z-10 max-w-md text-center flex flex-col items-center justify-center">
+          {/* Official ministry logo — natural colors, no CSS filters */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/momah-logo-stacked.png"
             alt="وزارة البلديات والإسكان — Ministry of Municipalities and Housing"
             className="mx-auto mb-10"
-            style={{ height: '160px', width: 'auto', objectFit: 'contain', filter: 'brightness(0) invert(1)' }}
+            style={{ height: '160px', width: 'auto', objectFit: 'contain' }}
           />
 
-          <h1 className="text-3xl font-bold text-white mb-4 leading-snug">
+          <h1 className="text-2xl font-bold mb-3 leading-snug" style={{ color: '#045859' }}>
             {t('login.brandTitle') || t('app.fullName')}
           </h1>
-          <p className="text-base text-white/60 leading-relaxed max-w-md">
+          <p className="text-sm leading-relaxed max-w-sm" style={{ color: '#5f7a6a' }}>
             {t('login.brandDesc') || t('app.subtitle')}
           </p>
         </div>
 
         {/* Footer on panel */}
-        <div className="absolute bottom-6 text-xs text-white/40">
+        <div className="absolute bottom-6 text-xs" style={{ color: '#8a9f8f' }}>
           {t('app.name')} {t('app.version')}
         </div>
       </div>

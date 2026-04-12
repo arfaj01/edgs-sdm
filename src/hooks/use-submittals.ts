@@ -297,6 +297,10 @@ export function useWorkflowTransition() {
         queryClient.invalidateQueries({
           queryKey: ['deliverables'],
         });
+        // Also invalidate the specific deliverable detail (which includes submittals)
+        queryClient.invalidateQueries({
+          queryKey: ['deliverable'],
+        });
       },
     }
   );

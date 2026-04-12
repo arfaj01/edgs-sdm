@@ -178,6 +178,23 @@ export default function DeliverableDetailPage() {
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{t('deliverables.status')}</p>
               <StatusBadge status={deliverable.status as any} />
             </div>
+
+            {/* Latest submittal status — shows workflow state if a submittal exists */}
+            {latestSubmittal && (
+              <div className="pt-2 border-t border-gray-200">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                  {t('deliverables.latestSubmittal')} ({t('deliverables.version')} {latestSubmittal.version})
+                </p>
+                <div className="flex items-center gap-3">
+                  <StatusBadge status={latestSubmittal.status as any} />
+                  {(latestSubmittal as any).submittal_stage && (
+                    <span className="inline-block px-2 py-0.5 text-xs font-medium rounded-full" style={{ backgroundColor: '#e6f2f2', color: '#045859' }}>
+                      {t(`workflow.stage${((latestSubmittal as any).submittal_stage as string).charAt(0).toUpperCase() + ((latestSubmittal as any).submittal_stage as string).slice(1)}`) || (latestSubmittal as any).submittal_stage}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
