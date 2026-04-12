@@ -164,6 +164,7 @@ export interface Submittal {
   notes_ar: string | null;
   file_url: string | null; // External file link — added in migration 009
   file_attachment_path: string | null; // Supabase Storage path — added in migration 009
+  assigned_to_user_id: string | null; // UUID — assigned reviewer, added in migration 011
   created_at: string; // timestamp
   updated_at: string; // timestamp
   deleted_at: string | null; // timestamp

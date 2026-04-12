@@ -158,6 +158,7 @@ function ApprovalFormPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitMode, setSubmitMode] = useState<'draft' | 'submit' | null>(null)
   const [successId, setSuccessId] = useState<string | null>(null)
+  const [transitionInfo, setTransitionInfo] = useState<{ stage?: string | null; assignee?: string | null } | null>(null)
 
   // Unwrap any error shape the Supabase client might return. The JS client
   // wraps Edge Function failures in a FunctionsHttpError whose message is
@@ -315,8 +316,10 @@ function ApprovalFormPage() {
 
   // ── submit handlers ─────────────────────────────────────
   const handleSave = async (submit: boolean) => {
+    /* ── DEBUG ── */ console.log('[EDGS] handleSave called — submit:', submit)
+
     if (!validate()) {
-      // Scroll the errors banner into view so the user sees what's wrong
+      /* ── DEBUG ── */ console.warn('[EDGS] Validation failed, aborting')
       requestAnimationFrame(() => {
         window.scrollTo({ top: 0, behavior: 'smooth' })
       })
@@ -325,12 +328,15 @@ function ApprovalFormPage() {
     setIsSubmitting(true)
     setSubmitMode(submit ? 'submit' : 'draft')
     setErrors([])
+
     try {
+      /* ── DEBUG ── */ console.log('[EDGS] Step 1: Calling create-submittal edge function…')
       const resp = await createSubmittal.mutateAsync({
         deliverable_id: selectedDeliverableId,
         purpose: purpose as SubmittalPurpose,
         notes: notes || undefined,
       })
+      /* ── DEBUG ── */ console.log('[EDGS] Step 1 done — create response:', JSON.stringify(resp))
 
       if (!resp?.id) {
         throw new Error('create-submittal returned no id')
@@ -339,23 +345,42 @@ function ApprovalFormPage() {
       // Persist extended columns (disciplines, notes_ar, request_type)
       // and line items. These calls hit the database directly through
       // the user-context Supabase client, so RLS applies.
+      /* ── DEBUG ── */ console.log('[EDGS] Step 2: Persisting extended columns for', resp.id)
       await persistExtended(resp.id)
+      /* ── DEBUG ── */ console.log('[EDGS] Step 2 done — persistExtended completed')
 
       if (submit) {
+        /* ── DEBUG ── */ console.log('[EDGS] Step 3: submit=true → Calling workflow-transition edge function…')
+        const transitionPayload = {
+          submittal_id: resp.id,
+          trigger_name: 'consultant_submit' as const,
+        }
+        /* ── DEBUG ── */ console.log('[EDGS] Transition payload:', JSON.stringify(transitionPayload))
+
         try {
-          await transition.mutateAsync({
-            submittal_id: resp.id,
-            trigger_name: 'consultant_submit',
-          })
+          const transResult = await transition.mutateAsync(transitionPayload)
+          /* ── DEBUG ── */ console.log('[EDGS] Step 3 done — transition response:', JSON.stringify(transResult))
+
+          // Store stage/assignee info for the success page
+          if (transResult) {
+            setTransitionInfo({
+              stage: transResult.new_stage,
+              assignee: transResult.assigned_to,
+            })
+          }
         } catch (e) {
           // Transition failed — the submittal exists as draft but was NOT
           // submitted for review. Surface a clear error so the user knows
           // they need to retry or check the request status.
-          console.error('Workflow transition failed:', e)
+          /* ── DEBUG ── */ console.error('[EDGS] Step 3 FAILED — transition error:', e)
+          /* ── DEBUG ── */ console.error('[EDGS] Error type:', typeof e, '| constructor:', (e as Error)?.constructor?.name)
+          /* ── DEBUG ── */ console.error('[EDGS] Error message:', (e as Error)?.message)
+
           const transitionMsg = await extractErrorMessage(e)
+          /* ── DEBUG ── */ console.error('[EDGS] Extracted message:', transitionMsg)
+
           setErrors([
-            t('approvalForm.transitionError') ||
-            `Request was saved as draft but could not be submitted for review: ${transitionMsg}`,
+            `${t('approvalForm.transitionError') || 'فشل إرسال الطلب للمراجعة'}: ${transitionMsg}`,
           ])
           // Scroll error into view so user sees what happened
           requestAnimationFrame(() => {
@@ -364,8 +389,11 @@ function ApprovalFormPage() {
           // Do NOT show success page — the request is still in Draft
           return
         }
+      } else {
+        /* ── DEBUG ── */ console.log('[EDGS] Step 3: submit=false → Skipping transition (save as draft only)')
       }
 
+      /* ── DEBUG ── */ console.log('[EDGS] Step 4: All done — showing success for submittal', resp.id)
       setSuccessId(resp.id)
       // Longer pause so the user can choose Print or View;
       // a fallback redirect happens after 8 seconds of inactivity.
@@ -373,7 +401,7 @@ function ApprovalFormPage() {
         router.push(`/deliverables/${selectedDeliverableId}`)
       }, 8000)
     } catch (e: unknown) {
-      console.error('Submit failed:', e)
+      /* ── DEBUG ── */ console.error('[EDGS] OUTER catch — submit failed:', e)
       const msg = await extractErrorMessage(e)
       setErrors([msg])
       // Scroll error into view
@@ -395,9 +423,36 @@ function ApprovalFormPage() {
           <h2 className="text-xl font-bold text-gray-900 mb-2">
             {t('approvalForm.createSuccess')}
           </h2>
-          <p className="text-sm text-gray-600 mb-6">
+          <p className="text-sm text-gray-600 mb-4">
             {t('approvalForm.submittalNumber')}
           </p>
+
+          {/* Show next stage and assignee after successful submission */}
+          {transitionInfo && (
+            <div className="mb-6 p-4 rounded-lg border text-sm" style={{ backgroundColor: '#f0faf5', borderColor: '#c6e9d7' }}>
+              {transitionInfo.stage && (
+                <p className="font-medium" style={{ color: '#045859' }}>
+                  {t('approvalForm.nextStage') || (isRTL ? 'المرحلة التالية' : 'Next Stage')}:{' '}
+                  <span className="font-bold">
+                    {transitionInfo.stage === 'technical'
+                      ? (isRTL ? 'الجهة الفنية' : 'Technical Review')
+                      : transitionInfo.stage === 'quality'
+                      ? (isRTL ? 'الجودة' : 'Quality Review')
+                      : transitionInfo.stage === 'pm'
+                      ? (isRTL ? 'مدير المشروع' : 'Project Manager')
+                      : transitionInfo.stage}
+                  </span>
+                </p>
+              )}
+              {transitionInfo.assignee && (
+                <p className="mt-1 text-gray-700">
+                  {t('approvalForm.assignedTo') || (isRTL ? 'مُسند إلى' : 'Assigned to')}:{' '}
+                  <span className="font-semibold">{transitionInfo.assignee}</span>
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button
               onClick={() => router.push(`/submittals/${successId}/print`)}

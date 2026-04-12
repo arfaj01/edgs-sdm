@@ -63,6 +63,9 @@ export interface WorkflowTransitionResponse {
   new_status: string;
   trigger: string;
   submittal_id: string;
+  new_stage?: string | null;
+  assigned_to?: string | null;
+  assigned_role?: string | null;
 }
 
 /**
@@ -242,6 +245,8 @@ export function useWorkflowTransition() {
   return useMutation<WorkflowTransitionResponse, Error, WorkflowTransitionPayload>(
     {
       mutationFn: async (payload) => {
+        /* ── DEBUG ── */ console.log('[EDGS:hook] useWorkflowTransition called with:', JSON.stringify(payload));
+
         const { data, error } = await supabase.functions.invoke(
           'workflow-transition',
           {
@@ -254,26 +259,32 @@ export function useWorkflowTransition() {
           }
         );
 
+        /* ── DEBUG ── */ console.log('[EDGS:hook] Edge function raw response — data:', JSON.stringify(data), '| error:', error ? JSON.stringify({ message: error.message, name: error.name }) : 'null');
+
         if (error) {
           // Supabase wraps non-2xx edge-function responses in FunctionsHttpError.
           // The real error body lives on error.context (a Response object).
           // Extract the actual message so callers get something useful.
           let detail = error.message;
           const ctx = (error as unknown as { context?: Response }).context;
+          /* ── DEBUG ── */ console.log('[EDGS:hook] Error has context?', !!ctx);
           if (ctx && typeof ctx === 'object' && 'json' in ctx) {
             try {
               const body = await ctx.clone().json();
+              /* ── DEBUG ── */ console.log('[EDGS:hook] Error context body:', JSON.stringify(body));
               if (body?.error) detail = String(body.error);
               else if (body?.message) detail = String(body.message);
             } catch {
               try {
                 const txt = await ctx.clone().text();
+                /* ── DEBUG ── */ console.log('[EDGS:hook] Error context text:', txt);
                 if (txt) detail = txt;
               } catch {
                 /* ignore */
               }
             }
           }
+          /* ── DEBUG ── */ console.error('[EDGS:hook] Throwing error:', detail);
           throw new Error(detail);
         }
 
@@ -282,9 +293,11 @@ export function useWorkflowTransition() {
         // but defensive check here in case it ever returns 200 with success=false).
         if (data && typeof data === 'object' && 'success' in data && !(data as { success: boolean }).success) {
           const errMsg = (data as { error?: string }).error || 'Workflow transition failed';
+          /* ── DEBUG ── */ console.error('[EDGS:hook] Success=false, throwing:', errMsg);
           throw new Error(errMsg);
         }
 
+        /* ── DEBUG ── */ console.log('[EDGS:hook] Transition succeeded:', JSON.stringify(data));
         return data as WorkflowTransitionResponse;
       },
       onSuccess: (_, variables) => {

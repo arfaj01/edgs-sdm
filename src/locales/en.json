@@ -465,6 +465,8 @@
     "createSuccess": "Submittal created successfully",
     "createError": "Failed to create submittal",
     "transitionError": "Request was saved as draft but could not be submitted for review. Please try again or contact support.",
+    "nextStage": "Next Stage",
+    "assignedTo": "Assigned to",
     "validationRequired": "Please fill in all required fields",
     "atLeastOneDiscipline": "Please select at least one discipline",
     "atLeastOneLineItem": "Please add at least one line item",
