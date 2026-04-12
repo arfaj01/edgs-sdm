@@ -348,12 +348,21 @@ function ApprovalFormPage() {
             trigger_name: 'consultant_submit',
           })
         } catch (e) {
-          // If transition fails, the submittal still exists as draft —
-          // log but don't throw away user work.
+          // Transition failed — the submittal exists as draft but was NOT
+          // submitted for review. Surface a clear error so the user knows
+          // they need to retry or check the request status.
           console.error('Workflow transition failed:', e)
           const transitionMsg = await extractErrorMessage(e)
-          setErrors([`${t('approvalForm.createError')}: ${transitionMsg}`])
-          // Still land on success page because the submittal exists
+          setErrors([
+            t('approvalForm.transitionError') ||
+            `Request was saved as draft but could not be submitted for review: ${transitionMsg}`,
+          ])
+          // Scroll error into view so user sees what happened
+          requestAnimationFrame(() => {
+            window.scrollTo({ top: 0, behavior: 'smooth' })
+          })
+          // Do NOT show success page — the request is still in Draft
+          return
         }
       }
 

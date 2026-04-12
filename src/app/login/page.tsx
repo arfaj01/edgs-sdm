@@ -63,35 +63,22 @@ export default function LoginPage() {
           }}
         />
 
-        <div className="relative z-10 max-w-lg text-center">
+        <div className="relative z-10 max-w-lg text-center flex flex-col items-center justify-center">
+          {/* Ministry logo — displayed with white filter for visibility on dark background */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/momah-logo-stacked.png"
-            alt="Ministry of Municipalities and Housing"
-            className="mx-auto mb-8"
-            style={{ height: '140px', width: 'auto', objectFit: 'contain', filter: 'brightness(0) invert(1)' }}
+            alt="وزارة البلديات والإسكان — Ministry of Municipalities and Housing"
+            className="mx-auto mb-10"
+            style={{ height: '160px', width: 'auto', objectFit: 'contain', filter: 'brightness(0) invert(1)' }}
           />
 
-          <h1 className="text-3xl font-bold text-white mb-3 leading-snug">
+          <h1 className="text-3xl font-bold text-white mb-4 leading-snug">
             {t('login.brandTitle') || t('app.fullName')}
           </h1>
-          <p className="text-base text-white/70 leading-relaxed mb-10">
+          <p className="text-base text-white/60 leading-relaxed max-w-md">
             {t('login.brandDesc') || t('app.subtitle')}
           </p>
-
-          {/* Feature highlights */}
-          <div className="grid grid-cols-1 gap-4 text-start">
-            {[
-              { icon: '📋', label: t('login.feature1') || 'Workflow-driven engineering approvals' },
-              { icon: '🔒', label: t('login.feature2') || 'Role-based access and audit trail' },
-              { icon: '📊', label: t('login.feature3') || 'Real-time dashboards and SLA tracking' },
-            ].map((f, i) => (
-              <div key={i} className="flex items-center gap-3 bg-white/10 rounded-lg px-4 py-3">
-                <span className="text-lg">{f.icon}</span>
-                <span className="text-sm text-white/90">{f.label}</span>
-              </div>
-            ))}
-          </div>
         </div>
 
         {/* Footer on panel */}

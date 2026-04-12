@@ -254,7 +254,37 @@ export function useWorkflowTransition() {
           }
         );
 
-        if (error) throw error;
+        if (error) {
+          // Supabase wraps non-2xx edge-function responses in FunctionsHttpError.
+          // The real error body lives on error.context (a Response object).
+          // Extract the actual message so callers get something useful.
+          let detail = error.message;
+          const ctx = (error as unknown as { context?: Response }).context;
+          if (ctx && typeof ctx === 'object' && 'json' in ctx) {
+            try {
+              const body = await ctx.clone().json();
+              if (body?.error) detail = String(body.error);
+              else if (body?.message) detail = String(body.message);
+            } catch {
+              try {
+                const txt = await ctx.clone().text();
+                if (txt) detail = txt;
+              } catch {
+                /* ignore */
+              }
+            }
+          }
+          throw new Error(detail);
+        }
+
+        // Backend returned 2xx but body may still indicate failure
+        // (the edge function returns { success: false, error: "..." } with 422,
+        // but defensive check here in case it ever returns 200 with success=false).
+        if (data && typeof data === 'object' && 'success' in data && !(data as { success: boolean }).success) {
+          const errMsg = (data as { error?: string }).error || 'Workflow transition failed';
+          throw new Error(errMsg);
+        }
+
         return data as WorkflowTransitionResponse;
       },
       onSuccess: (_, variables) => {
