@@ -92,6 +92,7 @@ export default function ReviewPage() {
         const { data: { user: authUser } } = await supabase.auth.getUser();
         if (!authUser) throw new Error('Not authenticated');
 
+        console.log('[EDGS:review] Calling record_review_comment RPC:', { submittalId, action_code: selectedActionCode });
         const { data: rpcResult, error: rpcError } = await supabase.rpc('record_review_comment', {
           p_submittal_id: submittalId,
           p_user_id: authUser.id,
@@ -99,8 +100,20 @@ export default function ReviewPage() {
           p_comments: comments || null,
         });
 
-        if (rpcError) throw new Error(rpcError.message);
-        if (rpcResult && !rpcResult.success) throw new Error(rpcResult.error);
+        if (rpcError) {
+          console.error('[EDGS:review] RPC error:', rpcError.message);
+          throw new Error(rpcError.message);
+        }
+        // RPC may return null (no rows affected) or { success: false }
+        if (rpcResult === null || rpcResult === undefined) {
+          console.error('[EDGS:review] RPC returned null — review comment may not have been recorded');
+          throw new Error('Review comment was not recorded. Please check your role and the submittal status.');
+        }
+        if (rpcResult && !rpcResult.success) {
+          console.error('[EDGS:review] RPC returned success=false:', JSON.stringify(rpcResult));
+          throw new Error(rpcResult.error || 'Failed to record review comment');
+        }
+        console.log('[EDGS:review] RPC succeeded:', JSON.stringify(rpcResult));
 
         setSubmitSuccess(true);
         setSelectedActionCode(null);
@@ -110,11 +123,32 @@ export default function ReviewPage() {
         return;
       }
 
-      const { error: transitionError } = await supabase.functions.invoke('workflow-transition', {
+      console.log('[EDGS:review] Invoking workflow-transition:', { submittal_id: submittalId, trigger_name: triggerName, action_code: selectedActionCode });
+      const { data: fnData, error: transitionError } = await supabase.functions.invoke('workflow-transition', {
         body: { submittal_id: submittalId, trigger_name: triggerName, action_code: selectedActionCode, comments: comments || undefined },
       });
 
-      if (transitionError) throw new Error(transitionError.message);
+      if (transitionError) {
+        // Extract real error from FunctionsHttpError context (Response object)
+        let detail = transitionError.message;
+        const ctx = (transitionError as unknown as { context?: Response }).context;
+        if (ctx && typeof ctx === 'object' && 'json' in ctx) {
+          try {
+            const body = await ctx.clone().json();
+            console.error('[EDGS:review] Error context body:', JSON.stringify(body));
+            if (body?.error) detail = String(body.error);
+            else if (body?.message) detail = String(body.message);
+          } catch { /* ignore */ }
+        }
+        throw new Error(detail);
+      }
+
+      // Edge function may return 200 with { success: false, error: "..." }
+      if (fnData && typeof fnData === 'object' && 'success' in fnData && !fnData.success) {
+        console.error('[EDGS:review] Transition returned success=false:', JSON.stringify(fnData));
+        throw new Error(fnData.error || 'Workflow transition failed');
+      }
+      console.log('[EDGS:review] Transition succeeded:', JSON.stringify(fnData));
 
       setSubmitSuccess(true);
       setSelectedActionCode(null);

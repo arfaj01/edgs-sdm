@@ -52,8 +52,10 @@ BEGIN
   END IF;
 END $$;
 
--- ── Step 1: DROP old function to avoid signature conflicts ───────────
--- Using DROP + CREATE instead of CREATE OR REPLACE for clean slate
+-- ── Step 1: DROP old function(s) to avoid signature conflicts ────────
+-- The Black Box RPC from migrations 001-007 used (uuid, varchar, uuid, action_code, text).
+-- Drop that old signature first, then our own (uuid, text, uuid, text, text) for clean slate.
+DROP FUNCTION IF EXISTS public.execute_workflow_transition(UUID, VARCHAR, UUID, action_code, TEXT);
 DROP FUNCTION IF EXISTS public.execute_workflow_transition(UUID, TEXT, UUID, TEXT, TEXT);
 
 -- ── Step 2: CREATE the function from scratch ─────────────────────────

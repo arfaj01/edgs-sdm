@@ -47,48 +47,85 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex" dir={isRTL ? 'rtl' : 'ltr'}>
-      {/* Left panel — ministry branding */}
+      {/* Left panel — official MOMAH branding */}
       <div
         className="hidden lg:flex lg:w-[52%] relative flex-col items-center justify-center p-12"
-        style={{ backgroundColor: '#f0f5f0' }}
+        style={{ backgroundColor: '#045859' }}
       >
-        {/* Subtle decorative border accent at the side */}
-        <div className="absolute top-0 bottom-0 right-0 w-1" style={{ backgroundColor: '#045859' }} />
+        {/* Decorative geometric pattern overlay */}
+        <div
+          className="absolute inset-0 opacity-[0.06]"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+          }}
+        />
 
-        <div className="relative z-10 max-w-md text-center flex flex-col items-center justify-center">
-          {/* Official ministry logo — natural colors, no CSS filters */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/momah-logo-stacked.png"
-            alt="وزارة البلديات والإسكان — Ministry of Municipalities and Housing"
-            className="mx-auto mb-10"
-            style={{ height: '160px', width: 'auto', objectFit: 'contain' }}
-          />
+        {/* Accent line on inner edge */}
+        <div
+          className="absolute top-0 bottom-0"
+          style={{
+            width: '3px',
+            backgroundColor: '#87ba26',
+            ...(isRTL ? { left: 0 } : { right: 0 }),
+          }}
+        />
 
-          <h1 className="text-2xl font-bold mb-3 leading-snug" style={{ color: '#045859' }}>
-            {t('login.brandTitle') || t('app.fullName')}
+        <div className="relative z-10 max-w-lg text-center flex flex-col items-center justify-center">
+          {/* Official MOMAH logo — SVG, white-friendly background */}
+          <div
+            className="mb-8 p-6 rounded-2xl"
+            style={{ backgroundColor: 'rgba(255,255,255,0.95)' }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/momah-logo.svg"
+              alt="وزارة البلديات والإسكان — Ministry of Municipalities and Housing"
+              className="mx-auto"
+              style={{ height: '120px', width: 'auto', objectFit: 'contain' }}
+            />
+          </div>
+
+          {/* Arabic platform name */}
+          <h1
+            className="text-2xl font-bold mb-2 leading-relaxed"
+            style={{ color: '#ffffff' }}
+            dir="rtl"
+          >
+            منصة حوكمة وتسليم المخرجات الهندسية
           </h1>
-          <p className="text-sm leading-relaxed max-w-sm" style={{ color: '#5f7a6a' }}>
-            {t('login.brandDesc') || t('app.subtitle')}
+
+          {/* English subtitle */}
+          <p className="text-base mb-6" style={{ color: 'rgba(255,255,255,0.8)' }}>
+            Engineering Deliverables Governance System
           </p>
+
+          {/* SDM Projects badge */}
+          <div
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium"
+            style={{ backgroundColor: 'rgba(135,186,38,0.2)', color: '#87ba26', border: '1px solid rgba(135,186,38,0.3)' }}
+          >
+            <span>SDM Projects</span>
+            <span style={{ color: 'rgba(255,255,255,0.4)' }}>|</span>
+            <span>مشاريع إس دي إم</span>
+          </div>
         </div>
 
         {/* Footer on panel */}
-        <div className="absolute bottom-6 text-xs" style={{ color: '#8a9f8f' }}>
+        <div className="absolute bottom-6 text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>
           {t('app.name')} {t('app.version')}
         </div>
       </div>
 
       {/* Right panel — login form */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col bg-white">
         {/* Top bar with language */}
-        <div className={`flex items-center justify-between px-6 py-4`}>
+        <div className="flex items-center justify-between px-6 py-4">
           <div className="lg:hidden">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/momah-logo-horizontal.png"
+              src="/momah-logo.svg"
               alt="MOMAH"
-              className="h-10 w-auto object-contain"
+              className="h-12 w-auto object-contain"
             />
           </div>
           <div className={`${isRTL ? 'mr-auto' : 'ml-auto'}`}>
@@ -101,10 +138,10 @@ export default function LoginPage() {
           <div className="w-full max-w-[420px]">
             {/* Mobile logo + title */}
             <div className="lg:hidden text-center mb-8">
-              <h1 className="text-xl font-bold mb-1" style={{ color: '#045859' }}>
-                {t('login.title')}
+              <h1 className="text-lg font-bold mb-1" style={{ color: '#045859' }} dir="rtl">
+                منصة حوكمة وتسليم المخرجات الهندسية
               </h1>
-              <p className="text-sm text-gray-500">{t('login.subtitle')}</p>
+              <p className="text-sm text-gray-500">Engineering Deliverables Governance System</p>
             </div>
 
             {/* Desktop header */}

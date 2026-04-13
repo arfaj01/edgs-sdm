@@ -70,11 +70,32 @@ export default function ApprovalPage() {
     try {
       const triggerName = selectedActionCode === 'D' ? 'owner_reject' : 'owner_approve';
 
-      const { error: transitionError } = await supabase.functions.invoke('workflow-transition', {
+      console.log('[EDGS:approval] Invoking workflow-transition:', { submittal_id: submittalId, trigger_name: triggerName, action_code: selectedActionCode });
+      const { data: fnData, error: transitionError } = await supabase.functions.invoke('workflow-transition', {
         body: { submittal_id: submittalId, trigger_name: triggerName, action_code: selectedActionCode, comments: comments || undefined },
       });
 
-      if (transitionError) throw new Error(transitionError.message);
+      if (transitionError) {
+        // Extract real error from FunctionsHttpError context (Response object)
+        let detail = transitionError.message;
+        const ctx = (transitionError as unknown as { context?: Response }).context;
+        if (ctx && typeof ctx === 'object' && 'json' in ctx) {
+          try {
+            const body = await ctx.clone().json();
+            console.error('[EDGS:approval] Error context body:', JSON.stringify(body));
+            if (body?.error) detail = String(body.error);
+            else if (body?.message) detail = String(body.message);
+          } catch { /* ignore */ }
+        }
+        throw new Error(detail);
+      }
+
+      // Edge function may return 200 with { success: false, error: "..." }
+      if (fnData && typeof fnData === 'object' && 'success' in fnData && !fnData.success) {
+        console.error('[EDGS:approval] Transition returned success=false:', JSON.stringify(fnData));
+        throw new Error(fnData.error || 'Workflow transition failed');
+      }
+      console.log('[EDGS:approval] Transition succeeded:', JSON.stringify(fnData));
 
       setSubmitSuccess(true);
       setSelectedActionCode(null);
