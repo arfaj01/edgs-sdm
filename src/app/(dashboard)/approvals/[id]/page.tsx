@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { useSubmittal, useSupabase } from '@/hooks';
+import { useSubmittal, useWorkflowTransition } from '@/hooks';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { ActionCodeBadge } from '@/components/ui/action-code-badge';
@@ -24,7 +24,7 @@ export default function ApprovalPage() {
   const params = useParams();
   const router = useRouter();
   const submittalId = params.id as string;
-  const supabase = useSupabase();
+  const transition = useWorkflowTransition();
   const { t } = useI18n();
   const { data: submittal, isLoading, error } = useSubmittal(submittalId);
 
@@ -70,38 +70,24 @@ export default function ApprovalPage() {
     try {
       const triggerName = selectedActionCode === 'D' ? 'owner_reject' : 'owner_approve';
 
-      console.log('[EDGS:approval] Invoking workflow-transition:', { submittal_id: submittalId, trigger_name: triggerName, action_code: selectedActionCode });
-      const { data: fnData, error: transitionError } = await supabase.functions.invoke('workflow-transition', {
-        body: { submittal_id: submittalId, trigger_name: triggerName, action_code: selectedActionCode, comments: comments || undefined },
+      console.log('[EDGS-FRONT:approval] Calling useWorkflowTransition:', { submittal_id: submittalId, trigger_name: triggerName, action_code: selectedActionCode });
+
+      const result = await transition.mutateAsync({
+        submittal_id: submittalId,
+        trigger_name: triggerName,
+        action_code: selectedActionCode,
+        comments: comments || undefined,
       });
 
-      if (transitionError) {
-        // Extract real error from FunctionsHttpError context (Response object)
-        let detail = transitionError.message;
-        const ctx = (transitionError as unknown as { context?: Response }).context;
-        if (ctx && typeof ctx === 'object' && 'json' in ctx) {
-          try {
-            const body = await ctx.clone().json();
-            console.error('[EDGS:approval] Error context body:', JSON.stringify(body));
-            if (body?.error) detail = String(body.error);
-            else if (body?.message) detail = String(body.message);
-          } catch { /* ignore */ }
-        }
-        throw new Error(detail);
-      }
-
-      // Edge function may return 200 with { success: false, error: "..." }
-      if (fnData && typeof fnData === 'object' && 'success' in fnData && !fnData.success) {
-        console.error('[EDGS:approval] Transition returned success=false:', JSON.stringify(fnData));
-        throw new Error(fnData.error || 'Workflow transition failed');
-      }
-      console.log('[EDGS:approval] Transition succeeded:', JSON.stringify(fnData));
+      // Hook already validates success and throws on failure — if we reach here, it succeeded
+      console.log('[EDGS-FRONT:approval] Transition confirmed:', JSON.stringify(result));
 
       setSubmitSuccess(true);
       setSelectedActionCode(null);
       setComments('');
       setTimeout(() => { setSubmitSuccess(false); router.push(`/deliverables/${submittal.deliverable_id}`); }, 2000);
     } catch (err) {
+      console.error('[EDGS-FRONT:approval] Error:', err instanceof Error ? err.message : err);
       setSubmitError(err instanceof Error ? err.message : t('common.error'));
     } finally {
       setIsSubmitting(false);

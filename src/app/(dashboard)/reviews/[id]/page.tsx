@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { useSubmittal, useSupabase, useUser } from '@/hooks';
+import { useSubmittal, useRecordReviewComment, useWorkflowTransition, useUser } from '@/hooks';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { ActionCodeBadge } from '@/components/ui/action-code-badge';
@@ -17,7 +17,8 @@ export default function ReviewPage() {
   const params = useParams();
   const router = useRouter();
   const submittalId = params.id as string;
-  const supabase = useSupabase();
+  const transition = useWorkflowTransition();
+  const recordComment = useRecordReviewComment();
   const { user } = useUser();
   const { t } = useI18n();
   const { data: submittal, isLoading, error } = useSubmittal(submittalId);
@@ -76,85 +77,58 @@ export default function ReviewPage() {
     setIsSubmitting(true);
 
     try {
-      let triggerName: string;
+      if (selectedActionCode === 'A' || selectedActionCode === 'B') {
+        // A/B codes: record review comment (not a workflow transition)
+        if (!user?.id) throw new Error('Not authenticated');
 
-      if (selectedActionCode === 'C') {
-        triggerName = 'reviewer_return';
-      } else if (selectedActionCode === 'D') {
-        if (isPM) {
-          triggerName = 'reviewer_reject';
-        } else {
-          setSubmitError(t('review.pmRejectOnly'));
-          setIsSubmitting(false);
-          return;
-        }
-      } else {
-        const { data: { user: authUser } } = await supabase.auth.getUser();
-        if (!authUser) throw new Error('Not authenticated');
+        console.log('[EDGS-FRONT:review] Recording comment via useRecordReviewComment:', { submittalId, action_code: selectedActionCode });
 
-        console.log('[EDGS:review] Calling record_review_comment RPC:', { submittalId, action_code: selectedActionCode });
-        const { data: rpcResult, error: rpcError } = await supabase.rpc('record_review_comment', {
-          p_submittal_id: submittalId,
-          p_user_id: authUser.id,
-          p_action_code: selectedActionCode,
-          p_comments: comments || null,
+        await recordComment.mutateAsync({
+          submittal_id: submittalId,
+          user_id: user.id,
+          action_code: selectedActionCode,
+          comments: comments || null,
         });
 
-        if (rpcError) {
-          console.error('[EDGS:review] RPC error:', rpcError.message);
-          throw new Error(rpcError.message);
-        }
-        // RPC may return null (no rows affected) or { success: false }
-        if (rpcResult === null || rpcResult === undefined) {
-          console.error('[EDGS:review] RPC returned null — review comment may not have been recorded');
-          throw new Error('Review comment was not recorded. Please check your role and the submittal status.');
-        }
-        if (rpcResult && !rpcResult.success) {
-          console.error('[EDGS:review] RPC returned success=false:', JSON.stringify(rpcResult));
-          throw new Error(rpcResult.error || 'Failed to record review comment');
-        }
-        console.log('[EDGS:review] RPC succeeded:', JSON.stringify(rpcResult));
+        // Hook validates success and throws on failure — if we reach here, it succeeded
+        console.log('[EDGS-FRONT:review] Comment recorded successfully');
+      } else {
+        // C/D codes: workflow transition
+        let triggerName: string;
 
-        setSubmitSuccess(true);
-        setSelectedActionCode(null);
-        setComments('');
-        setTimeout(() => { setSubmitSuccess(false); router.push(`/deliverables/${submittal.deliverable_id}`); }, 2000);
-        setIsSubmitting(false);
-        return;
+        if (selectedActionCode === 'C') {
+          triggerName = 'reviewer_return';
+        } else if (selectedActionCode === 'D') {
+          if (isPM) {
+            triggerName = 'reviewer_reject';
+          } else {
+            setSubmitError(t('review.pmRejectOnly'));
+            setIsSubmitting(false);
+            return;
+          }
+        } else {
+          throw new Error(`Unknown action code: ${selectedActionCode}`);
+        }
+
+        console.log('[EDGS-FRONT:review] Calling useWorkflowTransition:', { submittal_id: submittalId, trigger_name: triggerName, action_code: selectedActionCode });
+
+        const result = await transition.mutateAsync({
+          submittal_id: submittalId,
+          trigger_name: triggerName,
+          action_code: selectedActionCode,
+          comments: comments || undefined,
+        });
+
+        // Hook validates success and throws on failure — if we reach here, it succeeded
+        console.log('[EDGS-FRONT:review] Transition confirmed:', JSON.stringify(result));
       }
-
-      console.log('[EDGS:review] Invoking workflow-transition:', { submittal_id: submittalId, trigger_name: triggerName, action_code: selectedActionCode });
-      const { data: fnData, error: transitionError } = await supabase.functions.invoke('workflow-transition', {
-        body: { submittal_id: submittalId, trigger_name: triggerName, action_code: selectedActionCode, comments: comments || undefined },
-      });
-
-      if (transitionError) {
-        // Extract real error from FunctionsHttpError context (Response object)
-        let detail = transitionError.message;
-        const ctx = (transitionError as unknown as { context?: Response }).context;
-        if (ctx && typeof ctx === 'object' && 'json' in ctx) {
-          try {
-            const body = await ctx.clone().json();
-            console.error('[EDGS:review] Error context body:', JSON.stringify(body));
-            if (body?.error) detail = String(body.error);
-            else if (body?.message) detail = String(body.message);
-          } catch { /* ignore */ }
-        }
-        throw new Error(detail);
-      }
-
-      // Edge function may return 200 with { success: false, error: "..." }
-      if (fnData && typeof fnData === 'object' && 'success' in fnData && !fnData.success) {
-        console.error('[EDGS:review] Transition returned success=false:', JSON.stringify(fnData));
-        throw new Error(fnData.error || 'Workflow transition failed');
-      }
-      console.log('[EDGS:review] Transition succeeded:', JSON.stringify(fnData));
 
       setSubmitSuccess(true);
       setSelectedActionCode(null);
       setComments('');
       setTimeout(() => { setSubmitSuccess(false); router.push(`/deliverables/${submittal.deliverable_id}`); }, 2000);
     } catch (err) {
+      console.error('[EDGS-FRONT:review] Error:', err instanceof Error ? err.message : err);
       setSubmitError(err instanceof Error ? err.message : t('review.error'));
     } finally {
       setIsSubmitting(false);

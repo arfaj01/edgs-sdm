@@ -11,7 +11,7 @@ export default function DashboardError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error('[EDGS:error-boundary] Dashboard error caught:', error);
+    console.error('[EDGS-FRONT:error-boundary] Dashboard error caught:', error);
   }, [error]);
 
   return (

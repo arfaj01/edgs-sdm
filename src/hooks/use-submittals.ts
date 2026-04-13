@@ -238,6 +238,76 @@ export function useCreateSubmittal() {
  * Calls the "workflow-transition" edge function with submittal_id, trigger_name, and optional action_code/comments.
  * @returns Mutation hook for workflow transitions
  */
+/**
+ * Request payload for recording a review comment (action codes A/B).
+ * This is NOT a workflow transition — it records the reviewer's decision
+ * without changing the submittal status.
+ */
+export interface RecordReviewCommentPayload {
+  submittal_id: string;
+  user_id: string;
+  action_code: ActionCode;
+  comments?: string | null;
+}
+
+/**
+ * Hook to record a review comment via the record_review_comment RPC.
+ * Used for action codes A (No Comments) and B (Make Corrections) which
+ * do not trigger a workflow transition — they simply log the reviewer's
+ * decision against the submittal.
+ * @returns Mutation hook for recording review comments
+ */
+export function useRecordReviewComment() {
+  const supabase = useSupabase();
+  const queryClient = useQueryClient();
+
+  return useMutation<{ success: boolean }, Error, RecordReviewCommentPayload>({
+    mutationFn: async (payload) => {
+      console.log('[EDGS:hook] useRecordReviewComment called with:', JSON.stringify(payload));
+
+      const { data, error } = await supabase.rpc('record_review_comment', {
+        p_submittal_id: payload.submittal_id,
+        p_user_id: payload.user_id,
+        p_action_code: payload.action_code,
+        p_comments: payload.comments ?? null,
+      });
+
+      console.log('[EDGS:hook] record_review_comment response — data:', JSON.stringify(data), '| error:', error ? JSON.stringify({ message: error.message }) : 'null');
+
+      if (error) {
+        console.error('[EDGS:hook] RPC error:', error.message);
+        throw new Error(error.message);
+      }
+
+      // RPC may return null (no rows affected) or { success: false }
+      if (data === null || data === undefined) {
+        console.error('[EDGS:hook] RPC returned null — comment may not have been recorded');
+        throw new Error('Review comment was not recorded. Please check your role and the submittal status.');
+      }
+
+      if (data && typeof data === 'object' && 'success' in data && !(data as { success: boolean }).success) {
+        const errMsg = (data as { error?: string }).error || 'Failed to record review comment';
+        console.error('[EDGS:hook] RPC success=false:', errMsg);
+        throw new Error(errMsg);
+      }
+
+      console.log('[EDGS:hook] Review comment recorded successfully:', JSON.stringify(data));
+      return { success: true };
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['submittal', variables.submittal_id] });
+      queryClient.invalidateQueries({ queryKey: ['submittals'] });
+      queryClient.invalidateQueries({ queryKey: ['deliverables'] });
+      queryClient.invalidateQueries({ queryKey: ['deliverable'] });
+    },
+  });
+}
+
+/**
+ * Hook to perform a workflow transition via edge function.
+ * Calls the "workflow-transition" edge function with submittal_id, trigger_name, and optional action_code/comments.
+ * @returns Mutation hook for workflow transitions
+ */
 export function useWorkflowTransition() {
   const supabase = useSupabase();
   const queryClient = useQueryClient();
