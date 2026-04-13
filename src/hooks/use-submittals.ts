@@ -7,6 +7,8 @@ import type {
   Document,
   Review,
   Approval,
+  Deliverable,
+  SubmittalLineItem,
   SubmittalTimeline,
   ActionCode,
   WorkflowTrigger,
@@ -109,17 +111,27 @@ export function useSubmittals(filters?: SubmittalFilters) {
  * @param id - The submittal UUID (optional, query is disabled if not provided)
  * @returns Query result with Submittal and related data
  */
+/**
+ * Extended submittal detail — includes all related data needed by
+ * downstream review/approval pages to render the full submission package.
+ */
+export interface SubmittalDetail extends Submittal {
+  documents: Document[];
+  reviews: Review[];
+  approval: Approval | null;
+  deliverable: Deliverable | null;
+  line_items: SubmittalLineItem[];
+  project_name: string | null;
+  project_name_ar: string | null;
+  project_code: string | null;
+  submitter_name: string | null;
+  assigned_user_name: string | null;
+}
+
 export function useSubmittal(id?: string) {
   const supabase = useSupabase();
 
-  return useQuery<
-    (Submittal & {
-      documents: Document[];
-      reviews: Review[];
-      approval: Approval | null;
-    }) | null,
-    Error
-  >({
+  return useQuery<SubmittalDetail | null, Error>({
     queryKey: ['submittal', id],
     queryFn: async () => {
       if (!id) return null;
@@ -132,10 +144,13 @@ export function useSubmittal(id?: string) {
 
       if (submittalError) throw submittalError;
 
+      // Parallel fetch: documents, reviews, approval, line items, deliverable
       const [
         { data: documents, error: documentsError },
         { data: reviews, error: reviewsError },
         { data: approval, error: approvalError },
+        { data: lineItems, error: lineItemsError },
+        { data: deliverable, error: deliverableError },
       ] = await Promise.all([
         supabase
           .from('documents')
@@ -145,23 +160,99 @@ export function useSubmittal(id?: string) {
           .from('reviews')
           .select('*')
           .eq('submittal_id', id)
-          .order('created_at', { ascending: false }),
+          .order('review_step', { ascending: true }),
         supabase
           .from('approvals')
           .select('*')
           .eq('submittal_id', id)
           .maybeSingle(),
+        supabase
+          .from('submittal_line_items')
+          .select('*')
+          .eq('submittal_id', id)
+          .order('item_no', { ascending: true }),
+        supabase
+          .from('deliverables')
+          .select('*')
+          .eq('id', submittal.deliverable_id)
+          .single(),
       ]);
 
       if (documentsError) throw documentsError;
       if (reviewsError) throw reviewsError;
       if (approvalError) throw approvalError;
+      // Line items and deliverable are non-critical — don't throw if missing
+      if (lineItemsError) console.warn('[EDGS:hook] line_items fetch error:', lineItemsError.message);
+      if (deliverableError) console.warn('[EDGS:hook] deliverable fetch error:', deliverableError.message);
+
+      // Resolve project name via deliverable → phase → project chain
+      let projectName: string | null = null;
+      let projectNameAr: string | null = null;
+      let projectCode: string | null = null;
+      if (deliverable?.phase_id) {
+        try {
+          const { data: phase } = await supabase
+            .from('phases')
+            .select('project_id')
+            .eq('id', deliverable.phase_id)
+            .single();
+          if (phase?.project_id) {
+            const { data: project } = await supabase
+              .from('projects')
+              .select('code, name, name_ar')
+              .eq('id', phase.project_id)
+              .single();
+            if (project) {
+              projectName = project.name || null;
+              projectNameAr = project.name_ar || null;
+              projectCode = project.code || null;
+            }
+          }
+        } catch { /* non-critical */ }
+      }
+
+      // Resolve submitter name
+      let submitterName: string | null = null;
+      if (submittal.submitted_by) {
+        try {
+          const { data: submitter } = await supabase
+            .from('users')
+            .select('full_name, full_name_ar, email')
+            .eq('id', submittal.submitted_by)
+            .single();
+          if (submitter) {
+            submitterName = submitter.full_name || submitter.full_name_ar || submitter.email || null;
+          }
+        } catch { /* non-critical */ }
+      }
+
+      // Resolve assigned user name
+      let assignedUserName: string | null = null;
+      if (submittal.assigned_to_user_id) {
+        try {
+          const { data: assignee } = await supabase
+            .from('users')
+            .select('full_name, full_name_ar, email')
+            .eq('id', submittal.assigned_to_user_id)
+            .single();
+          if (assignee) {
+            assignedUserName = assignee.full_name || assignee.full_name_ar || assignee.email || null;
+          }
+        } catch { /* non-critical */ }
+      }
 
       return {
         ...submittal,
         documents: documents || [],
         reviews: reviews || [],
         approval,
+        deliverable: (deliverable as Deliverable) || null,
+        line_items: (lineItems as SubmittalLineItem[]) || [],
+        project_name: projectName,
+        project_name_ar: projectNameAr,
+        project_code: projectCode,
+        submitter_name: submitterName,
+        assigned_user_name: assignedUserName,
       };
     },
     enabled: !!id,

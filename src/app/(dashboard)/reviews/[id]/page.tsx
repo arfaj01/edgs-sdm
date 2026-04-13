@@ -4,14 +4,13 @@ import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useSubmittal, useRecordReviewComment, useWorkflowTransition, useUser } from '@/hooks';
 import { PageHeader } from '@/components/ui/page-header';
-import { StatusBadge } from '@/components/ui/status-badge';
-import { ActionCodeBadge } from '@/components/ui/action-code-badge';
 import { SmartHeader } from '@/components/ui/smart-header';
 import { WorkflowTimeline } from '@/components/ui/workflow-timeline';
+import { SubmittalDetailPanel } from '@/components/ui/submittal-detail-panel';
 import { useI18n } from '@/lib/i18n';
-import { formatDate, formatDateTime, formatFileSize, cn } from '@/lib/utils';
+import { formatDateTime, cn } from '@/lib/utils';
 import type { ActionCode } from '@/types/database';
-import { Download, CheckCircle, AlertCircle, Clock } from 'lucide-react';
+import { CheckCircle, AlertCircle, Clock } from 'lucide-react';
 
 export default function ReviewPage() {
   const params = useParams();
@@ -47,6 +46,7 @@ export default function ReviewPage() {
   }
 
   if (error || !submittal) {
+    console.error('[EDGS-FRONT:review-detail] Load error:', error?.message);
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -59,7 +59,6 @@ export default function ReviewPage() {
   }
 
   const canReview = submittal.status === 'submitted' || submittal.status === 'under_review' || submittal.status === 'resubmitted';
-  // Allow Technical Unit, Quality Unit, and legacy project_coordinator to perform reviews
   const isCoordinator =
     user?.role === 'technical_unit' ||
     user?.role === 'quality_unit' ||
@@ -78,10 +77,9 @@ export default function ReviewPage() {
 
     try {
       if (selectedActionCode === 'A' || selectedActionCode === 'B') {
-        // A/B codes: record review comment (not a workflow transition)
         if (!user?.id) throw new Error('Not authenticated');
 
-        console.log('[EDGS-FRONT:review] Recording comment via useRecordReviewComment:', { submittalId, action_code: selectedActionCode });
+        console.log('[EDGS-FRONT:review-detail] Recording comment via useRecordReviewComment:', { submittalId, action_code: selectedActionCode });
 
         await recordComment.mutateAsync({
           submittal_id: submittalId,
@@ -90,10 +88,8 @@ export default function ReviewPage() {
           comments: comments || null,
         });
 
-        // Hook validates success and throws on failure — if we reach here, it succeeded
-        console.log('[EDGS-FRONT:review] Comment recorded successfully');
+        console.log('[EDGS-FRONT:review-detail] Comment recorded successfully');
       } else {
-        // C/D codes: workflow transition
         let triggerName: string;
 
         if (selectedActionCode === 'C') {
@@ -110,7 +106,7 @@ export default function ReviewPage() {
           throw new Error(`Unknown action code: ${selectedActionCode}`);
         }
 
-        console.log('[EDGS-FRONT:review] Calling useWorkflowTransition:', { submittal_id: submittalId, trigger_name: triggerName, action_code: selectedActionCode });
+        console.log('[EDGS-FRONT:review-detail] Calling useWorkflowTransition:', { submittal_id: submittalId, trigger_name: triggerName, action_code: selectedActionCode });
 
         const result = await transition.mutateAsync({
           submittal_id: submittalId,
@@ -119,8 +115,7 @@ export default function ReviewPage() {
           comments: comments || undefined,
         });
 
-        // Hook validates success and throws on failure — if we reach here, it succeeded
-        console.log('[EDGS-FRONT:review] Transition confirmed:', JSON.stringify(result));
+        console.log('[EDGS-FRONT:review-detail] Transition confirmed:', JSON.stringify(result));
       }
 
       setSubmitSuccess(true);
@@ -128,7 +123,7 @@ export default function ReviewPage() {
       setComments('');
       setTimeout(() => { setSubmitSuccess(false); router.push(`/deliverables/${submittal.deliverable_id}`); }, 2000);
     } catch (err) {
-      console.error('[EDGS-FRONT:review] Error:', err instanceof Error ? err.message : err);
+      console.error('[EDGS-FRONT:review-detail] Error:', err instanceof Error ? err.message : err);
       setSubmitError(err instanceof Error ? err.message : t('review.error'));
     } finally {
       setIsSubmitting(false);
@@ -139,7 +134,7 @@ export default function ReviewPage() {
     <div className="min-h-screen bg-gray-50">
       <PageHeader
         title={`${t('review.title')}: ${submittal.submittal_number}`}
-        description={`${t('review.version')} ${submittal.version} | ${formatDateTime(submittal.submitted_at)}`}
+        description={`${t('review.version')} ${submittal.version} | ${submittal.submitted_at ? formatDateTime(submittal.submitted_at) : ''}`}
       />
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -150,7 +145,7 @@ export default function ReviewPage() {
           submittalNumber={submittal.submittal_number}
           submittedAt={submittal.submitted_at}
           updatedAt={submittal.updated_at}
-          assignedTo={null}
+          assignedTo={submittal.assigned_user_name}
         />
 
         {/* Workflow Timeline — visual progress */}
@@ -162,6 +157,7 @@ export default function ReviewPage() {
           className="mb-6"
         />
 
+        {/* Success / Error banners */}
         {submitSuccess && (
           <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-start gap-3">
             <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
@@ -182,92 +178,12 @@ export default function ReviewPage() {
           </div>
         )}
 
-        {/* Submittal Details */}
-        <div className="bg-white rounded-lg shadow mb-6 overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">{t('review.submittalDetails')}</h2>
-          </div>
-          <div className="px-6 py-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div>
-                <p className="text-sm font-medium text-gray-500">{t('review.number')}</p>
-                <p className="mt-1 text-lg font-semibold text-gray-900">{submittal.submittal_number}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-500">{t('review.status')}</p>
-                <div className="mt-1"><StatusBadge status={submittal.status} /></div>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-500">{t('review.purpose')}</p>
-                <p className="mt-1 text-base text-gray-900">{submittal.purpose}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-500">{t('review.submittedBy')}</p>
-                <p className="mt-1 text-base text-gray-900">{submittal.submitted_by}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-500">{t('review.submittedAt')}</p>
-                <p className="mt-1 text-base text-gray-900">{formatDate(submittal.submitted_at)}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-500">{t('review.version')}</p>
-                <p className="mt-1 text-base font-mono text-gray-900">v{submittal.version}</p>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* ─── Full Submittal Detail Panel ─── */}
+        <SubmittalDetailPanel submittal={submittal} />
 
-        {/* Documents */}
-        {submittal.documents && submittal.documents.length > 0 && (
-          <div className="bg-white rounded-lg shadow mb-6 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">{t('review.attachedDocs')}</h2>
-            </div>
-            <div className="divide-y divide-gray-200">
-              {submittal.documents.map((doc) => (
-                <div key={doc.id} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50">
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-900">{doc.file_name}</p>
-                    <p className="text-sm text-gray-500 mt-1">{formatFileSize(doc.file_size_bytes)}</p>
-                  </div>
-                  <a href={`#download-${doc.id}`} className="inline-flex items-center gap-2 px-3 py-2 rounded hover:bg-gray-100 transition-colors" style={{ marginInlineStart: '1rem', color: '#045859', backgroundColor: '#e6f2f2' }}>
-                    <Download className="w-4 h-4" />
-                    <span className="text-sm font-medium">{t('review.download')}</span>
-                  </a>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Previous Reviews */}
-        {submittal.reviews && submittal.reviews.length > 0 && (
-          <div className="bg-white rounded-lg shadow mb-6 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">{t('review.previousReviews')}</h2>
-            </div>
-            <div className="divide-y divide-gray-200">
-              {submittal.reviews.map((review) => (
-                <div key={review.id} className="px-6 py-4">
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <p className="font-medium text-gray-900">{review.reviewer_id}</p>
-                      <p className="text-sm text-gray-500 mt-1">{formatDateTime(review.reviewed_at)}</p>
-                    </div>
-                    <ActionCodeBadge code={review.action_code} />
-                  </div>
-                  {review.comments && (
-                    <p className="text-gray-700 bg-gray-50 rounded p-3 text-sm mt-3">{review.comments}</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Review Form */}
+        {/* ─── Review Form ─── */}
         {canReview && (
-          <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="bg-white rounded-lg shadow overflow-hidden mt-6">
             <div className="px-6 py-4 border-b border-gray-200">
               <h2 className="text-lg font-semibold text-gray-900">{t('review.submitReview')}</h2>
               <p className="text-sm text-gray-600 mt-1">
@@ -285,7 +201,6 @@ export default function ReviewPage() {
                 <p className="text-xs text-gray-500 mb-4">{t('ux.hiddenActionsHint')}</p>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {ACTION_CODES.map((item) => {
-                    const isDisabled = false;
                     const isSelected = selectedActionCode === item.code;
                     const bgColor = { green: 'bg-green-50 border-green-200', amber: 'bg-amber-50 border-amber-200', orange: 'bg-orange-50 border-orange-200', red: 'bg-red-50 border-red-200' }[item.color];
                     const textColor = { green: 'text-green-900', amber: 'text-amber-900', orange: 'text-orange-900', red: 'text-red-900' }[item.color];
@@ -294,14 +209,11 @@ export default function ReviewPage() {
                     return (
                       <button
                         key={item.code}
-                        onClick={() => !isDisabled && setSelectedActionCode(item.code)}
-                        disabled={isDisabled}
+                        onClick={() => setSelectedActionCode(item.code)}
                         className={cn(
                           'p-4 rounded-lg border-2 transition-all',
-                          isDisabled && 'opacity-50 cursor-not-allowed',
                           isSelected ? `${bgColor} ${borderColor} ring-2 ring-offset-2` : 'border-gray-200 hover:border-gray-300',
                         )}
-                        title={isDisabled ? t('review.pmOnly') : ''}
                         style={{ textAlign: 'start' }}
                       >
                         <div className={`font-bold text-lg mb-1 ${textColor}`}>{item.code}</div>
@@ -345,7 +257,7 @@ export default function ReviewPage() {
         )}
 
         {!canReview && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start gap-3">
+          <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
             <div>
               <h3 className="font-semibold text-yellow-900">{t('review.cannotReview')}</h3>

@@ -4,14 +4,13 @@ import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useSubmittal, useWorkflowTransition } from '@/hooks';
 import { PageHeader } from '@/components/ui/page-header';
-import { StatusBadge } from '@/components/ui/status-badge';
-import { ActionCodeBadge } from '@/components/ui/action-code-badge';
 import { SmartHeader } from '@/components/ui/smart-header';
 import { WorkflowTimeline } from '@/components/ui/workflow-timeline';
+import { SubmittalDetailPanel } from '@/components/ui/submittal-detail-panel';
 import { useI18n } from '@/lib/i18n';
-import { formatDate, formatDateTime, formatFileSize, cn } from '@/lib/utils';
+import { formatDateTime, cn } from '@/lib/utils';
 import type { ActionCode } from '@/types/database';
-import { Download, CheckCircle, AlertCircle, Clock } from 'lucide-react';
+import { CheckCircle, AlertCircle, Clock } from 'lucide-react';
 
 // PM approval: simplified to 2 final outcomes — Approve (A) or Reject (D).
 // Intermediate codes (B/C) are reviewer-only.
@@ -43,6 +42,7 @@ export default function ApprovalPage() {
   }
 
   if (error || !submittal) {
+    console.error('[EDGS-FRONT:approval-detail] Load error:', error?.message);
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -70,7 +70,7 @@ export default function ApprovalPage() {
     try {
       const triggerName = selectedActionCode === 'D' ? 'owner_reject' : 'owner_approve';
 
-      console.log('[EDGS-FRONT:approval] Calling useWorkflowTransition:', { submittal_id: submittalId, trigger_name: triggerName, action_code: selectedActionCode });
+      console.log('[EDGS-FRONT:approval-detail] Calling useWorkflowTransition:', { submittal_id: submittalId, trigger_name: triggerName, action_code: selectedActionCode });
 
       const result = await transition.mutateAsync({
         submittal_id: submittalId,
@@ -79,15 +79,14 @@ export default function ApprovalPage() {
         comments: comments || undefined,
       });
 
-      // Hook already validates success and throws on failure — if we reach here, it succeeded
-      console.log('[EDGS-FRONT:approval] Transition confirmed:', JSON.stringify(result));
+      console.log('[EDGS-FRONT:approval-detail] Transition confirmed:', JSON.stringify(result));
 
       setSubmitSuccess(true);
       setSelectedActionCode(null);
       setComments('');
       setTimeout(() => { setSubmitSuccess(false); router.push(`/deliverables/${submittal.deliverable_id}`); }, 2000);
     } catch (err) {
-      console.error('[EDGS-FRONT:approval] Error:', err instanceof Error ? err.message : err);
+      console.error('[EDGS-FRONT:approval-detail] Error:', err instanceof Error ? err.message : err);
       setSubmitError(err instanceof Error ? err.message : t('common.error'));
     } finally {
       setIsSubmitting(false);
@@ -98,7 +97,7 @@ export default function ApprovalPage() {
     <div className="min-h-screen bg-gray-50">
       <PageHeader
         title={`${t('approval.title')}: ${submittal.submittal_number}`}
-        description={`${t('review.version')} ${submittal.version} | ${formatDateTime(submittal.submitted_at)}`}
+        description={`${t('review.version')} ${submittal.version} | ${submittal.submitted_at ? formatDateTime(submittal.submitted_at) : ''}`}
       />
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -109,7 +108,7 @@ export default function ApprovalPage() {
           submittalNumber={submittal.submittal_number}
           submittedAt={submittal.submitted_at}
           updatedAt={submittal.updated_at}
-          assignedTo={null}
+          assignedTo={submittal.assigned_user_name}
         />
 
         {/* Workflow Timeline — visual progress */}
@@ -121,6 +120,7 @@ export default function ApprovalPage() {
           className="mb-6"
         />
 
+        {/* Success / Error banners */}
         {submitSuccess && (
           <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-start gap-3">
             <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
@@ -141,127 +141,12 @@ export default function ApprovalPage() {
           </div>
         )}
 
-        {/* Submittal Details */}
-        <div className="bg-white rounded-lg shadow mb-6 overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">{t('review.submittalDetails')}</h2>
-          </div>
-          <div className="px-6 py-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div>
-                <p className="text-sm font-medium text-gray-500">{t('review.number')}</p>
-                <p className="mt-1 text-lg font-semibold text-gray-900">{submittal.submittal_number}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-500">{t('review.status')}</p>
-                <div className="mt-1"><StatusBadge status={submittal.status} /></div>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-500">{t('review.purpose')}</p>
-                <p className="mt-1 text-base text-gray-900">{submittal.purpose}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-500">{t('review.submittedBy')}</p>
-                <p className="mt-1 text-base text-gray-900">{submittal.submitted_by}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-500">{t('review.submittedAt')}</p>
-                <p className="mt-1 text-base text-gray-900">{formatDate(submittal.submitted_at)}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-500">{t('review.version')}</p>
-                <p className="mt-1 text-base font-mono text-gray-900">v{submittal.version}</p>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* ─── Full Submittal Detail Panel ─── */}
+        <SubmittalDetailPanel submittal={submittal} />
 
-        {/* Documents */}
-        {submittal.documents && submittal.documents.length > 0 && (
-          <div className="bg-white rounded-lg shadow mb-6 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">{t('review.attachedDocs')}</h2>
-            </div>
-            <div className="divide-y divide-gray-200">
-              {submittal.documents.map((doc) => (
-                <div key={doc.id} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50">
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-900">{doc.file_name}</p>
-                    <p className="text-sm text-gray-500 mt-1">{formatFileSize(doc.file_size_bytes)}</p>
-                  </div>
-                  <a href={`#download-${doc.id}`} className="inline-flex items-center gap-2 px-3 py-2 rounded hover:bg-gray-100 transition-colors" style={{ marginInlineStart: '1rem', color: '#045859', backgroundColor: '#e6f2f2' }}>
-                    <Download className="w-4 h-4" />
-                    <span className="text-sm font-medium">{t('review.download')}</span>
-                  </a>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Review Chain */}
-        {submittal.reviews && submittal.reviews.length > 0 && (
-          <div className="bg-white rounded-lg shadow mb-6 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">{t('approval.reviewChain')}</h2>
-            </div>
-            <div className="px-6 py-6">
-              <div className="flex flex-col gap-4">
-                {submittal.reviews.map((review, index) => (
-                  <div key={review.id} className="flex items-start gap-4">
-                    <div className="flex flex-col items-center">
-                      <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-sm font-semibold text-gray-700">{index + 1}</div>
-                      {index < submittal.reviews.length - 1 && <div className="w-0.5 h-12 bg-gray-300 my-2" />}
-                    </div>
-                    <div className="flex-1 pt-1">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-semibold text-gray-900">{review.reviewer_id}</p>
-                          <p className="text-sm text-gray-500 mt-0.5">{formatDateTime(review.reviewed_at)}</p>
-                        </div>
-                        <ActionCodeBadge code={review.action_code} />
-                      </div>
-                      {review.comments && <p className="text-gray-700 bg-gray-50 rounded p-3 text-sm mt-3">{review.comments}</p>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Existing Approval */}
-        {hasApproval && submittal.approval && (() => {
-          const approval = submittal.approval;
-          return (
-            <div className="bg-white rounded-lg shadow mb-6 overflow-hidden border-2 border-green-200">
-              <div className="px-6 py-4 border-b border-green-200 bg-green-50">
-                <h2 className="text-lg font-semibold text-green-900">{t('approval.finalDecision')}</h2>
-              </div>
-              <div className="px-6 py-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <p className="font-semibold text-gray-900">{approval.approved_by}</p>
-                    <p className="text-sm text-gray-500 mt-1">{formatDateTime(approval.decision_date)}</p>
-                  </div>
-                  <ActionCodeBadge code={approval.action_code} />
-                </div>
-                {approval.comments && <p className="text-gray-700 bg-gray-50 rounded p-4 text-sm mb-4">{approval.comments}</p>}
-                <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded flex items-start gap-3">
-                  <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p className="font-medium text-green-900">{t('approval.approvedStatus')}</p>
-                    <p className="text-sm text-green-700 mt-1">{t('approval.approvedOn')} {formatDate(approval.decision_date)}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-
-        {/* Approval Form */}
+        {/* ─── Approval Form ─── */}
         {canApprove && !hasApproval && (
-          <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="bg-white rounded-lg shadow overflow-hidden mt-6">
             <div className="px-6 py-4 border-b border-gray-200">
               <h2 className="text-lg font-semibold text-gray-900">{t('approval.submitDecision')}</h2>
               <p className="text-sm text-gray-600 mt-1">{t('approval.decisionHint')}</p>
@@ -325,7 +210,7 @@ export default function ApprovalPage() {
         )}
 
         {!canApprove && !hasApproval && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start gap-3">
+          <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
             <div>
               <h3 className="font-semibold text-yellow-900">{t('approval.cannotApprove')}</h3>
