@@ -305,16 +305,34 @@ export function useCreateSubmittal() {
 
   return useMutation<CreateSubmittalResponse, Error, CreateSubmittalPayload>({
     mutationFn: async (payload) => {
-      const { data, error } = await supabase.functions.invoke(
-        'create-submittal',
-        {
-          body: {
-            deliverable_id: payload.deliverable_id,
-            purpose: payload.purpose,
-            notes: payload.notes,
-          },
-        }
-      );
+      /* ── DEBUG ── */ console.log('[EDGS:hook] useCreateSubmittal called with:', JSON.stringify(payload));
+
+      // Wrap supabase.functions.invoke with a 30-second timeout to prevent
+      // indefinite hangs when the edge function or network stalls.
+      let data: CreateSubmittalResponse | null = null;
+      let error: { message: string; context?: Response } | null = null;
+
+      try {
+        const result = await Promise.race([
+          supabase.functions.invoke('create-submittal', {
+            body: {
+              deliverable_id: payload.deliverable_id,
+              purpose: payload.purpose,
+              notes: payload.notes,
+            },
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Request timed out after 30 seconds. Please try again.')), 30000)
+          ),
+        ]);
+        data = result.data;
+        error = result.error as typeof error;
+      } catch (timeoutErr) {
+        /* ── DEBUG ── */ console.error('[EDGS:hook] create-submittal timeout or network error:', timeoutErr);
+        throw timeoutErr instanceof Error ? timeoutErr : new Error(String(timeoutErr));
+      }
+
+      /* ── DEBUG ── */ console.log('[EDGS:hook] create-submittal raw response — data:', data ? 'present' : 'null', '| error:', error?.message || 'null');
 
       if (error) {
         // Supabase wraps non-2xx edge-function responses in FunctionsHttpError
@@ -327,6 +345,7 @@ export function useCreateSubmittal() {
         if (ctx && typeof ctx === 'object' && 'json' in ctx) {
           try {
             const body = await ctx.clone().json();
+            /* ── DEBUG ── */ console.log('[EDGS:hook] create-submittal error body:', JSON.stringify(body));
             if (body?.error) detail = String(body.error);
             else if (body?.message) detail = String(body.message);
           } catch {
@@ -338,6 +357,7 @@ export function useCreateSubmittal() {
             }
           }
         }
+        /* ── DEBUG ── */ console.error('[EDGS:hook] create-submittal throwing:', detail);
         throw new Error(detail);
       }
 
@@ -346,6 +366,7 @@ export function useCreateSubmittal() {
       if (data && typeof data === 'object' && 'error' in data && (data as { error: unknown }).error) {
         throw new Error(String((data as { error: unknown }).error));
       }
+      /* ── DEBUG ── */ console.log('[EDGS:hook] create-submittal succeeded, id:', (data as CreateSubmittalResponse)?.id);
       return data as CreateSubmittalResponse;
     },
     onSuccess: (_, variables) => {
@@ -443,17 +464,29 @@ export function useWorkflowTransition() {
       mutationFn: async (payload) => {
         /* ── DEBUG ── */ console.log('[EDGS:hook] useWorkflowTransition called with:', JSON.stringify(payload));
 
-        const { data, error } = await supabase.functions.invoke(
-          'workflow-transition',
-          {
-            body: {
-              submittal_id: payload.submittal_id,
-              trigger_name: payload.trigger_name,
-              action_code: payload.action_code,
-              comments: payload.comments,
-            },
-          }
-        );
+        // Wrap with 30-second timeout to prevent indefinite hangs
+        let data: WorkflowTransitionResponse | null = null;
+        let error: { message: string; context?: Response } | null = null;
+        try {
+          const result = await Promise.race([
+            supabase.functions.invoke('workflow-transition', {
+              body: {
+                submittal_id: payload.submittal_id,
+                trigger_name: payload.trigger_name,
+                action_code: payload.action_code,
+                comments: payload.comments,
+              },
+            }),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('Workflow transition timed out after 30 seconds. Please try again.')), 30000)
+            ),
+          ]);
+          data = result.data;
+          error = result.error as typeof error;
+        } catch (timeoutErr) {
+          /* ── DEBUG ── */ console.error('[EDGS:hook] workflow-transition timeout or network error:', timeoutErr);
+          throw timeoutErr instanceof Error ? timeoutErr : new Error(String(timeoutErr));
+        }
 
         /* ── DEBUG ── */ console.log('[EDGS:hook] Edge function raw response — data:', JSON.stringify(data), '| error:', error ? JSON.stringify({ message: error.message, name: error.name }) : 'null');
 

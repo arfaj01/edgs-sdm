@@ -402,13 +402,21 @@ function ApprovalFormPage() {
       }, 8000)
     } catch (e: unknown) {
       /* ── DEBUG ── */ console.error('[EDGS-FRONT:new-submittal] OUTER catch — submit failed:', e)
-      const msg = await extractErrorMessage(e)
+      let msg: string;
+      try {
+        msg = await extractErrorMessage(e)
+      } catch (extractErr) {
+        /* ── DEBUG ── */ console.error('[EDGS-FRONT:new-submittal] extractErrorMessage itself failed:', extractErr)
+        msg = e instanceof Error ? e.message : String(e) || t('approvalForm.createError')
+      }
+      /* ── DEBUG ── */ console.error('[EDGS-FRONT:new-submittal] Setting error banner:', msg)
       setErrors([msg])
       // Scroll error into view
       requestAnimationFrame(() => {
         window.scrollTo({ top: 0, behavior: 'smooth' })
       })
     } finally {
+      /* ── DEBUG ── */ console.log('[EDGS-FRONT:new-submittal] Finally block — resetting isSubmitting')
       setIsSubmitting(false)
       setSubmitMode(null)
     }
