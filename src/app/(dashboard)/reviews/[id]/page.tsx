@@ -79,7 +79,8 @@ export default function ReviewPage() {
       if (selectedActionCode === 'A' || selectedActionCode === 'B') {
         if (!user?.id) throw new Error('Not authenticated');
 
-        console.log('[EDGS-FRONT:review-detail] Recording comment via useRecordReviewComment:', { submittalId, action_code: selectedActionCode });
+        // Step 1: Record the review comment
+        console.log('[EDGS-FRONT:review-detail] Step 1: Recording comment via useRecordReviewComment:', { submittalId, action_code: selectedActionCode });
 
         await recordComment.mutateAsync({
           submittal_id: submittalId,
@@ -88,7 +89,20 @@ export default function ReviewPage() {
           comments: comments || null,
         });
 
-        console.log('[EDGS-FRONT:review-detail] Comment recorded successfully');
+        console.log('[EDGS-FRONT:review-detail] Step 1 done: Comment recorded');
+
+        // Step 2: Trigger workflow transition to advance to next stage
+        // owner_approve with A/B advances: technical→quality, quality→pm, pm→approved
+        console.log('[EDGS-FRONT:review-detail] Step 2: Calling useWorkflowTransition (owner_approve):', { submittal_id: submittalId, action_code: selectedActionCode });
+
+        const advanceResult = await transition.mutateAsync({
+          submittal_id: submittalId,
+          trigger_name: 'owner_approve',
+          action_code: selectedActionCode,
+          comments: comments || undefined,
+        });
+
+        console.log('[EDGS-FRONT:review-detail] Step 2 done: Transition confirmed:', JSON.stringify(advanceResult));
       } else {
         let triggerName: string;
 

@@ -126,6 +126,8 @@ export interface SubmittalDetail extends Submittal {
   project_code: string | null;
   submitter_name: string | null;
   assigned_user_name: string | null;
+  /** Map of user_id → display name for reviewers and approvers */
+  user_names: Record<string, string>;
 }
 
 export function useSubmittal(id?: string) {
@@ -241,6 +243,38 @@ export function useSubmittal(id?: string) {
         } catch { /* non-critical */ }
       }
 
+      // Resolve all user UUIDs referenced in reviews + approval to display names
+      const userNames: Record<string, string> = {};
+      const allUserIds = new Set<string>();
+      if (submittal.submitted_by) allUserIds.add(submittal.submitted_by);
+      if (submittal.assigned_to_user_id) allUserIds.add(submittal.assigned_to_user_id);
+      for (const r of (reviews || [])) {
+        if (r.reviewer_id) allUserIds.add(r.reviewer_id);
+      }
+      if (approval?.approved_by) allUserIds.add(approval.approved_by);
+
+      if (allUserIds.size > 0) {
+        try {
+          const { data: users } = await supabase
+            .from('users')
+            .select('id, full_name, full_name_ar, email')
+            .in('id', Array.from(allUserIds));
+          if (users) {
+            for (const u of users) {
+              userNames[u.id] = u.full_name || u.full_name_ar || u.email || u.id;
+            }
+          }
+        } catch { /* non-critical */ }
+      }
+
+      // Fill in submitter/assigned names from the batch lookup
+      if (!submitterName && submittal.submitted_by && userNames[submittal.submitted_by]) {
+        submitterName = userNames[submittal.submitted_by];
+      }
+      if (!assignedUserName && submittal.assigned_to_user_id && userNames[submittal.assigned_to_user_id]) {
+        assignedUserName = userNames[submittal.assigned_to_user_id];
+      }
+
       return {
         ...submittal,
         documents: documents || [],
@@ -253,6 +287,7 @@ export function useSubmittal(id?: string) {
         project_code: projectCode,
         submitter_name: submitterName,
         assigned_user_name: assignedUserName,
+        user_names: userNames,
       };
     },
     enabled: !!id,

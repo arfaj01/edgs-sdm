@@ -1,9 +1,11 @@
 'use client';
 
+import { useCallback } from 'react';
 import { useI18n } from '@/lib/i18n';
 import { formatDate, formatDateTime, formatFileSize } from '@/lib/utils';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { ActionCodeBadge } from '@/components/ui/action-code-badge';
+import { useSupabase } from '@/hooks/use-supabase';
 import type { SubmittalDetail } from '@/hooks';
 import {
   Download,
@@ -33,6 +35,35 @@ interface SubmittalDetailPanelProps {
 export function SubmittalDetailPanel({ submittal }: SubmittalDetailPanelProps) {
   const { t, language } = useI18n();
   const isAr = language === 'ar';
+  const supabase = useSupabase();
+
+  /** Generate a signed download URL from Supabase Storage and open it */
+  const handleStorageDownload = useCallback(async (storagePath: string) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('submittal-attachments')
+        .createSignedUrl(storagePath, 3600); // 1 hour
+      if (error) throw error;
+      if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+    } catch (err) {
+      console.error('[EDGS-FRONT:detail] Storage download error:', err);
+      alert(t('common.error'));
+    }
+  }, [supabase, t]);
+
+  /** Generate a signed download URL for a document record */
+  const handleDocDownload = useCallback(async (filePath: string) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('submittal-attachments')
+        .createSignedUrl(filePath, 3600);
+      if (error) throw error;
+      if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+    } catch (err) {
+      console.error('[EDGS-FRONT:detail] Document download error:', err);
+      alert(t('common.error'));
+    }
+  }, [supabase, t]);
 
   // Derive stages from reviews for the workflow journey section
   const stageMap: Record<string, string> = {
@@ -173,7 +204,7 @@ export function SubmittalDetailPanel({ submittal }: SubmittalDetailPanelProps) {
               <p className="text-sm font-medium text-gray-500">{t('detail.submitterName')}</p>
               <p className="mt-1 text-base text-gray-900 flex items-center gap-1">
                 <User className="w-4 h-4 text-gray-400" />
-                {submittal.submitter_name || submittal.submitted_by || '—'}
+                {submittal.submitter_name || (submittal.submitted_by && submittal.user_names[submittal.submitted_by]) || submittal.submitted_by || '—'}
               </p>
             </div>
             <div>
@@ -358,9 +389,12 @@ export function SubmittalDetailPanel({ submittal }: SubmittalDetailPanelProps) {
               <Download className="w-5 h-5 flex-shrink-0" style={{ color: '#045859' }} />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900">{t('detail.fileAttachment')}</p>
-                <p className="text-xs text-gray-500 truncate">{submittal.file_attachment_path}</p>
+                <p className="text-xs text-gray-500 truncate">{submittal.file_attachment_path.split('/').pop()}</p>
               </div>
-              <button className="px-3 py-1.5 rounded text-sm font-medium" style={{ color: '#045859', backgroundColor: '#e6f2f2' }}>
+              <button
+                onClick={() => handleStorageDownload(submittal.file_attachment_path!)}
+                className="px-3 py-1.5 rounded text-sm font-medium"
+                style={{ color: '#045859', backgroundColor: '#e6f2f2' }}>
                 {t('detail.downloadFile')}
               </button>
             </div>
@@ -379,12 +413,13 @@ export function SubmittalDetailPanel({ submittal }: SubmittalDetailPanelProps) {
                       {doc.revision_number && <> &middot; Rev {doc.revision_number}</>}
                     </p>
                   </div>
-                  <a href={`#download-${doc.id}`}
+                  <button
+                    onClick={() => handleDocDownload(doc.file_path)}
                     className="inline-flex items-center gap-2 px-3 py-2 rounded hover:bg-gray-100 transition-colors"
                     style={{ marginInlineStart: '1rem', color: '#045859', backgroundColor: '#e6f2f2' }}>
                     <Download className="w-4 h-4" />
                     <span className="text-sm font-medium">{t('review.download')}</span>
-                  </a>
+                  </button>
                 </div>
               ))}
             </div>
@@ -458,8 +493,8 @@ export function SubmittalDetailPanel({ submittal }: SubmittalDetailPanelProps) {
                   <div className="flex-1 pt-1">
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <div>
-                        <p className="font-semibold text-gray-900">{review.reviewer_id}</p>
-                        <p className="text-xs text-gray-500 capitalize">{review.reviewer_role?.replace(/_/g, ' ')}</p>
+                        <p className="font-semibold text-gray-900">{submittal.user_names[review.reviewer_id] || review.reviewer_id}</p>
+                        <p className="text-xs text-gray-500 capitalize">{review.reviewer_role ? (t(`roles.${review.reviewer_role}`) !== `roles.${review.reviewer_role}` ? t(`roles.${review.reviewer_role}`) : review.reviewer_role.replace(/_/g, ' ')) : ''}</p>
                         <p className="text-sm text-gray-500 mt-0.5">{formatDateTime(review.reviewed_at)}</p>
                       </div>
                       <ActionCodeBadge code={review.action_code} />
@@ -490,7 +525,7 @@ export function SubmittalDetailPanel({ submittal }: SubmittalDetailPanelProps) {
           <div className="px-6 py-6">
             <div className="flex items-start justify-between mb-4">
               <div>
-                <p className="font-semibold text-gray-900">{submittal.approval.approved_by}</p>
+                <p className="font-semibold text-gray-900">{submittal.user_names[submittal.approval.approved_by] || submittal.approval.approved_by}</p>
                 <p className="text-sm text-gray-500 mt-1">{formatDateTime(submittal.approval.decision_date)}</p>
               </div>
               <ActionCodeBadge code={submittal.approval.action_code} />
